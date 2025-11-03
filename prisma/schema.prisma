@@ -14,18 +14,6 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
-
-    @@index([name])
-}
-
 // Necessary for Next auth
 model Account {
     id                       String  @id @default(cuid())
@@ -54,15 +42,36 @@ model Session {
     user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model User {
+model User { //bearbeitet
     id            String    @id @default(cuid())
     name          String?
     email         String?   @unique
     emailVerified DateTime?
+    chips         Int       @default(1000)    // Aktuelle Chips
+    sessions      Session[]
+    pokerSessions PokerSessionUser[]
     image         String?
     accounts      Account[]
-    sessions      Session[]
-    posts         Post[]
+}
+
+model PokerSession { //bearbeitet
+    id            String    @id @default(cuid())
+    name          String
+    status        String    // laufend, beendet, pausiert
+    createdAt     DateTime  @default(now())
+    users         PokerSessionUser[]
+    gameState     Json?     // komplexer Spielzustand, optional gespeichert
+}
+
+model PokerSessionUser {
+    id            String     @id @default(cuid())
+    user          User       @relation(fields: [userId], references: [id])
+    userId        String
+    pokerSession  PokerSession @relation(fields: [pokerSessionId], references: [id])
+    pokerSessionId String
+    chips         Int        // Chips zu Beginn der Session oder aktuell
+    seatNumber    Int?       // Sitzplatz-Nummer am Tisch
+    isActive      Boolean    @default(true)
 }
 
 model VerificationToken {
