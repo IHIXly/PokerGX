@@ -1,29 +1,40 @@
-# Create T3 App
+# ♠️ PokerGX
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+**PokerGX** is a modern multiplayer poker platform built on the [T3 Stack](https://create.t3.gg/).  
+It combines type safety, authentication, and real-time interaction — allowing users to create, join, and manage poker sessions with persistent player data.
 
-## What's next? How do I make an app with this?
+---
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+## 🚀 Tech Stack
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+PokerGX is powered by the **T3 Stack** and the following technologies:
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+- ⚡ **Next.js** – React framework for full-stack apps  
+- 🧠 **tRPC** – Type-safe API layer between frontend and backend  
+- 🪄 **Prisma** – ORM for PostgreSQL database management  
+- 🎨 **Tailwind CSS** – Utility-first styling system  
+- 🔐 **NextAuth.js** – Authentication (Discord & GitHub login)  
+- 💾 **PostgreSQL** – Persistent storage for users, sessions, and chips  
+- 💬 **Framer Motion** – Smooth animations and transitions
 
-## Learn More
+---
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+## 🧰 Prerequisites
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+Make sure you have the following installed:
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+- [Node.js ≥ 18](https://nodejs.org/)
+- [npm ≥ 10]
+- A running **PostgreSQL** database
+- OAuth applications for **Discord** and **GitHub**
+- You will need for dev usecases the .env!
 
-## How do I deploy this?
+---
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+## ⚙️ Setup
+
+### 1️⃣ Clone the repository
+
+```bash
+git clone https://github.com/<your-username>/PokerGX.git
+cd PokerGX
