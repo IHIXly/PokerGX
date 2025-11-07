@@ -1,26 +1,40 @@
+// src/app/page.tsx Main Page
+
 "use client";
 
 import { useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { Loader2, Plus } from "lucide-react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import SessionSettings from "./components/SessionSettings";
 
 export default function HomePage() {
   const { data: session, status } = useSession();
-
+  const router = useRouter();
   const utils = api.useUtils();
+
+  const [showSettings, setShowSettings] = useState(false);
 
   const createSession = api.poker.createSession.useMutation({
     onSuccess: () => utils.poker.getSessions.invalidate(),
   });
 
-  const joinSession = api.poker.joinSession.useMutation({
-    onSuccess: () => utils.poker.getSessions.invalidate(),
+  const joinSession = api.poker.joinSession.useMutation({ //PokerSession beitreten
+    onSuccess: (data) => {
+    utils.poker.getSessions.invalidate();
+    router.push(`/room/${data.sessionId}`); //zur PokerRoomPage wechseln, mit ID
+  },
   });
 
   const endSession = api.poker.endSession.useMutation({
-  onSuccess: () => utils.poker.getSessions.invalidate(),
-});
+    onSuccess: () => utils.poker.getSessions.invalidate(),
+  });
+
+  const clearSession = api.poker.clearSession.useMutation({
+    onSuccess: () => utils.poker.getSessions.invalidate(),
+  });
 
 
   const { data: sessions, isLoading } = api.poker.getSessions.useQuery(undefined, {
@@ -54,8 +68,9 @@ export default function HomePage() {
           <h2 className="text-2xl font-semibold">Deine Poker-Sessions</h2>
           <button
             onClick={() => {
-              const name = prompt("Wie soll deine Session heißen?");
-              if (name) createSession.mutate({ name });
+              //const name = prompt("Wie soll deine Session heißen?");
+              //if (name) createSession.mutate({ name });
+              setShowSettings(true);
             }}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
           >
@@ -98,8 +113,8 @@ export default function HomePage() {
       <div className="flex items-center gap-4">
         {s.status !== "beendet" && (
           <button
-            onClick={() => joinSession.mutate({ sessionId: s.id })}
             className="text-indigo-400 hover:underline"
+            onClick={() => joinSession.mutate({ sessionId: s.id })} //zur Poker Seite wechseln mit ID
           >
             Beitreten
           </button>
@@ -113,6 +128,15 @@ export default function HomePage() {
             Beenden
           </button>
         )}
+
+        {isHost && s.status == "beendet" && (
+          <button
+            onClick={() => clearSession.mutate({ sessionId: s.id })}
+            className="text-indigo-400 fixed bottom-6 right-6 mt-6 hover:underline"
+          >
+            Clear
+          </button>
+        )}
       </div>
     </motion.li>
   );
@@ -122,6 +146,12 @@ export default function HomePage() {
           <p className="text-gray-500">Keine Sessions gefunden.</p>
         )}
       </motion.div>
+      {showSettings && (
+        <SessionSettings
+          user={session.user as { name: string; image?: string; chips: number }}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </main>
   );
 }

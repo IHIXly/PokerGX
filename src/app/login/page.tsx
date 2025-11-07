@@ -8,17 +8,17 @@ export default function LoginPage() {
       <h1 className="text-3xl font-bold mb-6">Willkommen bei PokerGX</h1>
 
       <button
-        onClick={() => signIn("discord", { callbackUrl: "/" })}
+        onClick={() => signIn("github", { callbackUrl: "/" })}
         className="bg-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-700 transition"
       >
-        Mit Discord einloggen
+        Mit GitHub einloggen
       </button>
 
       <button
-        onClick={() => signIn("github", { callbackUrl: "/" })}
-        className="bg-gray-800 px-6 py-3 rounded-xl hover:bg-gray-900 transition"
+        //onClick={() => signIn("discord", { callbackUrl: "/" })}
+        className="bg-red-600 px-6 py-3 rounded-xl hover:bg-indigo-700 transition"
       >
-        Mit GitHub einloggen
+        Bsp. Mit Discord
       </button>
     </main>
   );

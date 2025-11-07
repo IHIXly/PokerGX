@@ -1,9 +1,12 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import { useState } from "react";
+import ProfileOverlay from "./ProfileOverlay";
 
 export function UserBar() {
   const { data: session } = useSession();
+  const [showProfile, setShowProfile] = useState(false);
 
   if (!session) return null;
 
@@ -12,8 +15,21 @@ export function UserBar() {
       <img
         src={session.user.image ?? ""}
         alt="avatar"
-        className="w-8 h-8 rounded-full border border-gray-700"
+        onClick={() => setShowProfile(true)}
+        className="w-8 h-8 rounded-full border border-gray-700 cursor-pointer hover:scale-105 transition"
       />
+
+      {showProfile && (
+        <ProfileOverlay
+          user={{
+            name: session.user.name ?? "Unbekannt",
+            image: session.user.image ?? "",
+            chips: session.user.chips ?? 0,
+          }}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
+
       <span>{session.user.name ?? "Unbekannt"}</span>
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
