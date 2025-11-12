@@ -107,6 +107,20 @@ export const pokerRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
+      // Check: Status der Session
+      const session = await ctx.db.pokerSession.findUnique({
+        where: { id: input.sessionId },
+        select: { status: true },
+      });
+
+      if (!session) {
+        throw new Error("Session nicht gefunden.");
+      }
+
+      if (session.status === "gestartet") {
+        throw new Error("Das Spiel ist bereits gestartet.");
+      }
+
       // Check: ist User schon drin?
       const existing = await ctx.db.pokerSessionUser.findFirst({
         where: { pokerSessionId: input.sessionId, userId },
@@ -123,6 +137,19 @@ export const pokerRouter = createTRPCRouter({
       }
 
       return { sessionId: input.sessionId };
+    }),
+
+  // ✅ Spiel starten (nur Host)
+  startSession: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Status auf "gestartet" setzen
+      return await ctx.db.pokerSession.update({
+        where: { id: input.sessionId },
+        data: { status: "gestartet" },
+      });
     }),
 
   // ✅ Alle Sessions abrufen

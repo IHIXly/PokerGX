@@ -14,11 +14,18 @@ export default function PokerRoomPage() {
   const router = useRouter();
   const utils = api.useUtils();
 
-  const leveSession = api.poker.joinSession.useMutation({
+  const leaveSession = api.poker.joinSession.useMutation({
     onSuccess: (data) => {
     utils.poker.getSessions.invalidate();
     router.push(`/`);
   },
+  });
+
+  const startSession = api.poker.startSession.useMutation({
+    onSuccess: () => {
+      utils.poker.getSessions.invalidate();
+      utils.poker.getSessionById.invalidate({ sessionId });
+    },
   });
 
   // Daten der PokerSession laden
@@ -60,13 +67,28 @@ export default function PokerRoomPage() {
           ))}
         </ul>
       </div>
-      <button
-        //onClick={() => signIn("discord", { callbackUrl: "/" })}
-        className="text-indigo-400 fixed bottom-6 right-6 mt-6 hover:underline"
-        onClick={() => leveSession.mutate({ sessionId })}
-      >
-        Verlassen
-      </button>
+
+      {session.status !== "gestartet" && (
+        <div className="fixed bottom-6 right-6 flex flex-col items-end space-y-2">
+          {/* Spiel starten */}
+          <button
+            onClick={() => startSession.mutate({ sessionId })}
+            disabled={startSession.isLoading}
+            className="text-indigo-400 hover:underline disabled:opacity-50"
+          >
+            {startSession.isLoading ? "Startet..." : "Spiel starten"}
+          </button>
+
+          {/* Verlassen */}
+          <button
+            onClick={() => leaveSession.mutate({ sessionId })}
+            disabled={leaveSession.isLoading}
+            className="text-indigo-400 hover:underline disabled:opacity-50"
+          >
+            {leaveSession.isLoading ? "Verlasse..." : "Verlassen"}
+          </button>
+        </div>
+      )}
     </main>
   );
 }
