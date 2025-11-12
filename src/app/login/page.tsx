@@ -15,11 +15,13 @@ export default function LoginPage() {
       </button>
 
       <button
-        //onClick={() => signIn("discord", { callbackUrl: "/" })}
-        className="bg-red-600 px-6 py-3 rounded-xl hover:bg-indigo-700 transition"
-      >
-        Bsp. Mit Discord
-      </button>
+          onClick={() => signIn("credentials", { redirect: true, callbackUrl: "/", credentials: {} })}
+
+          className="bg-gray-600 hover:bg-gray-700 px-6 py-2 rounded-lg font-semibold"
+        >
+          Als Gast fortfahren
+        </button>
+
     </main>
   );
 }
