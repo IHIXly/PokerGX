@@ -61,8 +61,18 @@ export default function PokerRoomPage() {
         <ul className="space-y-2">
           {session.users.map((u) => (
             <li key={u.id} className="flex justify-between">
-              <span>{u.user.name ?? "Unbekannt"}</span>
-              <span className="text-indigo-400">{u.chips} Chips</span>
+              <div>
+                <div className="font-medium">{u.user.name ?? "Unbekannt"}</div>
+                <div className="text-sm text-gray-400 mt-1">
+                   Chips: <span className="text-indigo-400">{u.chips}</span>
+                </div>
+
+                {session.status === "gestartet" && (
+                  <div className="text-sm text-gray-400 mt-1">
+                    Einsatz: <span className="text-indigo-400">{u.setChips ?? 0} Chips</span>
+                  </div>
+                )}
+              </div>
             </li>
           ))}
         </ul>

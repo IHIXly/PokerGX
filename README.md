@@ -97,3 +97,113 @@ new "Spiel starten" and "Verlassen" button in app/room/page.ts
         </div>
       )}
 ```
+
+
+## Sessions
+
+````prisma
+model Session {
+    id           String   @id @default(cuid())
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User { //bearbeitet
+    id            String    @id @default(cuid())
+    name          String?
+    email         String?   @unique
+    emailVerified DateTime?
+    chips         Int       @default(1000)    // Aktuelle Chips
+    sessions      Session[]
+    pokerSessions PokerSessionUser[]
+    image         String?
+    accounts      Account[]
+}
+
+model PokerSession { //bearbeitet
+    id            String    @id @default(cuid())
+    name          String
+    status        String    // laufend, beendet, pausiert
+    createdAt     DateTime  @default(now())
+    users         PokerSessionUser[]
+    gameState     Json?     // komplexer Spielzustand, optional gespeichert
+}
+
+model PokerSessionUser {
+    id            String     @id @default(cuid())
+    user          User       @relation(fields: [userId], references: [id])
+    userId        String
+    pokerSession  PokerSession @relation(fields: [pokerSessionId], references: [id])
+    pokerSessionId String
+    chips         Int        // Chips zu Beginn der Session oder aktuell
+    seatNumber    Int?       // Sitzplatz-Nummer am Tisch
+    isActive      Boolean    @default(true)
+    setChips      Int       // Die gesetzten Chips
+    activ         Boolean   //Wenn du noch im Spiel bist und nicht gefoldet hast
+    maxed         Boolean   //Wenn du nicht zu erhöhen brauchst
+    checked       Boolean   //Wenn du mit dem Einsatz zufrieden bist
+    valid         Boolean   //Wenn du noch zusetzendes Geld hast
+    yourTurn      Boolean   //Wenn du an der Reihe bist
+}
+````
+
+````
+User
+ ├── accounts (1-to-many)
+ ├── sessions (1-to-many)
+ └── pokerSessions (1-to-many via PokerSessionUser)
+
+PokerSession
+ └── users (1-to-many via PokerSessionUser)
+
+PokerSessionUser
+ ├── user (many-to-1)
+ └── pokerSession (many-to-1)
+````
+
+The endpoint:
+````ts
+getSessionById: protectedProcedure //provisorisch!!
+  .input(z.object({ sessionId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    return ctx.db.pokerSession.findUnique({
+      where: { id: input.sessionId },
+      include: {
+        users: { include: { user: true } },
+      },
+    });
+  }),
+````
+
+````ts
+// Daten der PokerSession laden
+  const { data: session, isLoading } = api.poker.getSessionById.useQuery(
+    { sessionId },
+    { enabled: !!sessionId }
+  );
+````
+
+structure:
+````
+PokerSession {
+  id
+  name
+  ...
+  users: [
+    PokerSessionUser {
+      chips
+      checked
+      yourTurn
+      ...
+      user: User {
+        name
+        email
+        image
+        ...
+      }
+    }
+  ]
+}
+````

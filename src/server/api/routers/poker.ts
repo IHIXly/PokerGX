@@ -139,7 +139,7 @@ export const pokerRouter = createTRPCRouter({
       return { sessionId: input.sessionId };
     }),
 
-  // ✅ Spiel starten (nur Host)
+  // ✅ Spiel starten
   startSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
