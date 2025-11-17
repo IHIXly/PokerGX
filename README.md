@@ -30,6 +30,8 @@ Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/ver
 
 ## Changes by Tim
 
+### Start Game
+
 part of joinSession in server/api/routers/poker.ts
 ```ts
 // Check: Status der Session
@@ -96,6 +98,90 @@ new "Spiel starten" and "Verlassen" button in app/room/page.ts
           </button>
         </div>
       )}
+```
+
+### Set Chips
+
+new function in server/api/routers/poker.ts
+```ts
+SetChips: protectedProcedure
+    .input(z.object({ sessionId: z.string(), amount: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { sessionId, amount } = input;
+
+      // Prüfen, ob Session existiert und gestartet ist
+      const session = await ctx.db.pokerSession.findUnique({
+        where: { id: sessionId },
+        select: { status: true },
+      });
+
+      if (!session) throw new Error("Session nicht gefunden.");
+      if (session.status !== "gestartet") throw new Error("Das Spiel läuft nicht.");
+
+      // Prüfen, ob User Teil der Session ist
+      const psUser = await ctx.db.pokerSessionUser.findFirst({
+        where: { pokerSessionId: sessionId, userId },
+      });
+
+      if (!psUser) throw new Error("Du bist nicht Teil dieser Session.");
+
+      // Bei Erhöhung sicherstellen, dass genug Chips vorhanden sind
+      if (amount > 0 && psUser.chips < amount) {
+        throw new Error("Nicht genügend Chips.");
+      }
+
+      // Update: setChips += amount, chips -= amount (bei positiver amount)
+      const updated = await ctx.db.pokerSessionUser.update({
+        where: { id: psUser.id },
+        data: {
+          setChips: { increment: amount },
+          chips: { increment: -amount },
+        },
+      });
+      return updated;
+    }),
+```
+new function in app/room/page.ts
+```ts
+// neue Mutation, die setChips anpasst
+  const SetChips = api.poker.SetChips.useMutation({
+    onSuccess: () => {
+      utils.poker.getSessionById.invalidate({ sessionId });
+      utils.poker.getSessions.invalidate();
+    },
+  });
+```
+
+new button in app/room/page.ts
+```ts
+{session.users.map((u) => (
+            <li key={u.id} className="flex justify-between">
+              <div>
+                <div className="font-medium">{u.user.name ?? "Unbekannt"}</div>
+                <div className="text-sm text-gray-400 mt-1">
+                   Chips: <span className="text-indigo-400">{u.chips}</span>
+                </div>
+
+                {session.status === "gestartet" && (
+                  <div className="text-sm text-gray-400 mt-1">
+                    Einsatz: <span className="text-indigo-400">{u.setChips ?? 0} Chips</span>
+                  </div>
+                )}
+              </div>
+              {session.status === "gestartet" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => SetChips.mutate({ sessionId, amount: 10 })}
+                      disabled={SetChips.isLoading || u.chips < 10}
+                      className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm disabled:opacity-50"
+                    >
+                      +10
+                    </button>
+                  </div>
+                )}
+            </li>
+          ))}
 ```
 
 

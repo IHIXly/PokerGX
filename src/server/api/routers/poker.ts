@@ -183,4 +183,42 @@ export const pokerRouter = createTRPCRouter({
       },
     });
   }),
+
+  SetChips: protectedProcedure
+    .input(z.object({ sessionId: z.string(), amount: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { sessionId, amount } = input;
+
+      // Prüfen, ob Session existiert und gestartet ist
+      const session = await ctx.db.pokerSession.findUnique({
+        where: { id: sessionId },
+        select: { status: true },
+      });
+
+      if (!session) throw new Error("Session nicht gefunden.");
+      if (session.status !== "gestartet") throw new Error("Das Spiel läuft nicht.");
+
+      // Prüfen, ob User Teil der Session ist
+      const psUser = await ctx.db.pokerSessionUser.findFirst({
+        where: { pokerSessionId: sessionId, userId },
+      });
+
+      if (!psUser) throw new Error("Du bist nicht Teil dieser Session.");
+
+      // Bei Erhöhung sicherstellen, dass genug Chips vorhanden sind
+      if (amount > 0 && psUser.chips < amount) {
+        throw new Error("Nicht genügend Chips.");
+      }
+
+      // Update: setChips += amount, chips -= amount (bei positiver amount)
+      const updated = await ctx.db.pokerSessionUser.update({
+        where: { id: psUser.id },
+        data: {
+          setChips: { increment: amount },
+          chips: { increment: -amount },
+        },
+      });
+      return updated;
+    }),
 });

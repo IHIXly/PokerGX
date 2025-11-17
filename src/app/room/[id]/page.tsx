@@ -7,12 +7,14 @@ import { Loader2 } from "lucide-react";
 import { getServers } from "dns/promises";
 import { getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function PokerRoomPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const router = useRouter();
   const utils = api.useUtils();
+  const { data: authSession } = useSession();
 
   const leaveSession = api.poker.joinSession.useMutation({
     onSuccess: (data) => {
@@ -25,6 +27,14 @@ export default function PokerRoomPage() {
     onSuccess: () => {
       utils.poker.getSessions.invalidate();
       utils.poker.getSessionById.invalidate({ sessionId });
+    },
+  });
+
+  // neue Mutation, die setChips anpasst
+  const SetChips = api.poker.SetChips.useMutation({
+    onSuccess: () => {
+      utils.poker.getSessionById.invalidate({ sessionId });
+      utils.poker.getSessions.invalidate();
     },
   });
 
@@ -73,6 +83,17 @@ export default function PokerRoomPage() {
                   </div>
                 )}
               </div>
+              {session.status === "gestartet" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => SetChips.mutate({ sessionId, amount: 10 })}
+                      disabled={SetChips.isLoading || u.chips < 10}
+                      className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm disabled:opacity-50"
+                    >
+                      +10
+                    </button>
+                  </div>
+                )}
             </li>
           ))}
         </ul>
