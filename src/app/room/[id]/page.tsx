@@ -7,18 +7,35 @@ import { Loader2 } from "lucide-react";
 import { getServers } from "dns/promises";
 import { getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function PokerRoomPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const router = useRouter();
   const utils = api.useUtils();
+  const { data: authSession } = useSession();
 
-  const leveSession = api.poker.joinSession.useMutation({
+  const leaveSession = api.poker.joinSession.useMutation({
     onSuccess: (data) => {
     utils.poker.getSessions.invalidate();
     router.push(`/`);
   },
+  });
+
+  const startSession = api.poker.startSession.useMutation({
+    onSuccess: () => {
+      utils.poker.getSessions.invalidate();
+      utils.poker.getSessionById.invalidate({ sessionId });
+    },
+  });
+
+  // neue Mutation, die setChips anpasst
+  const SetChips = api.poker.SetChips.useMutation({
+    onSuccess: () => {
+      utils.poker.getSessionById.invalidate({ sessionId });
+      utils.poker.getSessions.invalidate();
+    },
   });
 
   // Daten der PokerSession laden
@@ -54,19 +71,55 @@ export default function PokerRoomPage() {
         <ul className="space-y-2">
           {session.users.map((u) => (
             <li key={u.id} className="flex justify-between">
-              <span>{u.user.name ?? "Unbekannt"}</span>
-              <span className="text-indigo-400">{u.chips} Chips</span>
+              <div>
+                <div className="font-medium">{u.user.name ?? "Unbekannt"}</div>
+                <div className="text-sm text-gray-400 mt-1">
+                   Chips: <span className="text-indigo-400">{u.chips}</span>
+                </div>
+
+                {session.status === "gestartet" && (
+                  <div className="text-sm text-gray-400 mt-1">
+                    Einsatz: <span className="text-indigo-400">{u.setChips ?? 0} Chips</span>
+                  </div>
+                )}
+              </div>
+              {session.status === "gestartet" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => SetChips.mutate({ sessionId, amount: 10 })}
+                      disabled={SetChips.isLoading || u.chips < 10}
+                      className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm disabled:opacity-50"
+                    >
+                      +10
+                    </button>
+                  </div>
+                )}
             </li>
           ))}
         </ul>
       </div>
-      <button
-        //onClick={() => signIn("discord", { callbackUrl: "/" })}
-        className="text-indigo-400 fixed bottom-6 right-6 mt-6 hover:underline"
-        onClick={() => leveSession.mutate({ sessionId })}
-      >
-        Verlassen
-      </button>
+
+      {session.status !== "gestartet" && (
+        <div className="fixed bottom-6 right-6 flex flex-col items-end space-y-2">
+          {/* Spiel starten */}
+          <button
+            onClick={() => startSession.mutate({ sessionId })}
+            disabled={startSession.isLoading}
+            className="text-indigo-400 hover:underline disabled:opacity-50"
+          >
+            {startSession.isLoading ? "Startet..." : "Spiel starten"}
+          </button>
+
+          {/* Verlassen */}
+          <button
+            onClick={() => leaveSession.mutate({ sessionId })}
+            disabled={leaveSession.isLoading}
+            className="text-indigo-400 hover:underline disabled:opacity-50"
+          >
+            {leaveSession.isLoading ? "Verlasse..." : "Verlassen"}
+          </button>
+        </div>
+      )}
     </main>
   );
 }

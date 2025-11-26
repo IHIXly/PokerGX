@@ -72,6 +72,11 @@ model PokerSessionUser {
     chips         Int        // Chips zu Beginn der Session oder aktuell
     seatNumber    Int?       // Sitzplatz-Nummer am Tisch
     isActive      Boolean    @default(true)
+    setChips      Int       @default(0)
+    maxed         Boolean   @default(true)
+    checked       Boolean   @default(true)
+    valid         Boolean   @default(true)
+    yourTurn      Boolean   @default(true)
 }
 
 model VerificationToken {
