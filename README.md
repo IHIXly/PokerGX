@@ -31,265 +31,88 @@ Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/ver
 ## Changes by Tim
 
 ### Start Game
+```js
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
-part of joinSession in server/api/routers/poker.ts
-```ts
-// Check: Status der Session
-      const session = await ctx.db.pokerSession.findUnique({
-        where: { id: input.sessionId },
-        select: { status: true },
-      });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-      if (!session) {
-        throw new Error("Session nicht gefunden.");
-      }
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-      if (session.status === "gestartet") {
-        throw new Error("Das Spiel ist bereits gestartet.");
-      }
-```
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: false,
+  },
+  transports: ["websocket", "polling"],
+});
 
-new function in server/api/routers/poker.ts
-```ts
-// ✅ Spiel starten (nur Host)
-  startSession: protectedProcedure
-    .input(z.object({ sessionId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
+// Räume
+const rooms = {};
 
-      // Status auf "gestartet" setzen
-      return await ctx.db.pokerSession.update({
-        where: { id: input.sessionId },
-        data: { status: "gestartet" },
-      });
-    }),
-```
+io.on("connection", (socket) => {
+  console.log("🔌 Neuer Client:", socket.id);
 
-new function in app/room/page.ts
-```ts
-const startSession = api.poker.startSession.useMutation({
-    onSuccess: () => {
-      utils.poker.getSessions.invalidate();
-      utils.poker.getSessionById.invalidate({ sessionId });
-    },
+  // Client explicitly joins the session room
+  socket.on("join_session", (sessionId) => {
+    socket.join(sessionId);
+    console.log("👋 Client ist Raum beigetreten:", sessionId, socket.id);
   });
-```
 
-new "Spiel starten" and "Verlassen" button in app/room/page.ts
-```ts
-{session.status !== "gestartet" && (
-        <div className="fixed bottom-6 right-6 flex flex-col items-end space-y-2">
-          {/* Spiel starten */}
-          <button
-            onClick={() => startSession.mutate({ sessionId })}
-            disabled={startSession.isLoading}
-            className="text-indigo-400 hover:underline disabled:opacity-50"
-          >
-            {startSession.isLoading ? "Startet..." : "Spiel starten"}
-          </button>
+  socket.on("start_session", ({ sessionId, players }) => {
+    console.log("📝 Session wird gestartet:", sessionId, players);
 
-          {/* Verlassen */}
-          <button
-            onClick={() => leaveSession.mutate({ sessionId })}
-            disabled={leaveSession.isLoading}
-            className="text-indigo-400 hover:underline disabled:opacity-50"
-          >
-            {leaveSession.isLoading ? "Verlasse..." : "Verlassen"}
-          </button>
-        </div>
-      )}
-```
+    // Ensure the starter is in the room
+    socket.join(sessionId);
 
-### Set Chips
-
-new function in server/api/routers/poker.ts
-```ts
-SetChips: protectedProcedure
-    .input(z.object({ sessionId: z.string(), amount: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const { sessionId, amount } = input;
-
-      // Prüfen, ob Session existiert und gestartet ist
-      const session = await ctx.db.pokerSession.findUnique({
-        where: { id: sessionId },
-        select: { status: true },
-      });
-
-      if (!session) throw new Error("Session nicht gefunden.");
-      if (session.status !== "gestartet") throw new Error("Das Spiel läuft nicht.");
-
-      // Prüfen, ob User Teil der Session ist
-      const psUser = await ctx.db.pokerSessionUser.findFirst({
-        where: { pokerSessionId: sessionId, userId },
-      });
-
-      if (!psUser) throw new Error("Du bist nicht Teil dieser Session.");
-
-      // Bei Erhöhung sicherstellen, dass genug Chips vorhanden sind
-      if (amount > 0 && psUser.chips < amount) {
-        throw new Error("Nicht genügend Chips.");
-      }
-
-      // Update: setChips += amount, chips -= amount (bei positiver amount)
-      const updated = await ctx.db.pokerSessionUser.update({
-        where: { id: psUser.id },
-        data: {
-          setChips: { increment: amount },
-          chips: { increment: -amount },
-        },
-      });
-      return updated;
-    }),
-```
-new function in app/room/page.ts
-```ts
-// neue Mutation, die setChips anpasst
-  const SetChips = api.poker.SetChips.useMutation({
-    onSuccess: () => {
-      utils.poker.getSessionById.invalidate({ sessionId });
-      utils.poker.getSessions.invalidate();
-    },
-  });
-```
-
-new button in app/room/page.ts
-```ts
-{session.users.map((u) => (
-            <li key={u.id} className="flex justify-between">
-              <div>
-                <div className="font-medium">{u.user.name ?? "Unbekannt"}</div>
-                <div className="text-sm text-gray-400 mt-1">
-                   Chips: <span className="text-indigo-400">{u.chips}</span>
-                </div>
-
-                {session.status === "gestartet" && (
-                  <div className="text-sm text-gray-400 mt-1">
-                    Einsatz: <span className="text-indigo-400">{u.setChips ?? 0} Chips</span>
-                  </div>
-                )}
-              </div>
-              {session.status === "gestartet" && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => SetChips.mutate({ sessionId, amount: 10 })}
-                      disabled={SetChips.isLoading || u.chips < 10}
-                      className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm disabled:opacity-50"
-                    >
-                      +10
-                    </button>
-                  </div>
-                )}
-            </li>
-          ))}
-```
-
-
-## Sessions
-
-````prisma
-model Session {
-    id           String   @id @default(cuid())
-    sessionToken String   @unique
-    userId       String
-    expires      DateTime
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model User { //bearbeitet
-    id            String    @id @default(cuid())
-    name          String?
-    email         String?   @unique
-    emailVerified DateTime?
-    chips         Int       @default(1000)    // Aktuelle Chips
-    sessions      Session[]
-    pokerSessions PokerSessionUser[]
-    image         String?
-    accounts      Account[]
-}
-
-model PokerSession { //bearbeitet
-    id            String    @id @default(cuid())
-    name          String
-    status        String    // laufend, beendet, pausiert
-    createdAt     DateTime  @default(now())
-    users         PokerSessionUser[]
-    gameState     Json?     // komplexer Spielzustand, optional gespeichert
-}
-
-model PokerSessionUser {
-    id            String     @id @default(cuid())
-    user          User       @relation(fields: [userId], references: [id])
-    userId        String
-    pokerSession  PokerSession @relation(fields: [pokerSessionId], references: [id])
-    pokerSessionId String
-    chips         Int        // Chips zu Beginn der Session oder aktuell
-    seatNumber    Int?       // Sitzplatz-Nummer am Tisch
-    isActive      Boolean    @default(true)
-    setChips      Int       // Die gesetzten Chips
-    activ         Boolean   //Wenn du noch im Spiel bist und nicht gefoldet hast
-    maxed         Boolean   //Wenn du nicht zu erhöhen brauchst
-    checked       Boolean   //Wenn du mit dem Einsatz zufrieden bist
-    valid         Boolean   //Wenn du noch zusetzendes Geld hast
-    yourTurn      Boolean   //Wenn du an der Reihe bist
-}
-````
-
-````
-User
- ├── accounts (1-to-many)
- ├── sessions (1-to-many)
- └── pokerSessions (1-to-many via PokerSessionUser)
-
-PokerSession
- └── users (1-to-many via PokerSessionUser)
-
-PokerSessionUser
- ├── user (many-to-1)
- └── pokerSession (many-to-1)
-````
-
-The endpoint:
-````ts
-getSessionById: protectedProcedure //provisorisch!!
-  .input(z.object({ sessionId: z.string() }))
-  .query(async ({ ctx, input }) => {
-    return ctx.db.pokerSession.findUnique({
-      where: { id: input.sessionId },
-      include: {
-        users: { include: { user: true } },
-      },
-    });
-  }),
-````
-
-````ts
-// Daten der PokerSession laden
-  const { data: session, isLoading } = api.poker.getSessionById.useQuery(
-    { sessionId },
-    { enabled: !!sessionId }
-  );
-````
-
-structure:
-````
-PokerSession {
-  id
-  name
-  ...
-  users: [
-    PokerSessionUser {
-      chips
-      checked
-      yourTurn
-      ...
-      user: User {
-        name
-        email
-        image
-        ...
-      }
+    // @ts-ignore
+    if (!rooms[sessionId]) {
+      // @ts-ignore
+      rooms[sessionId] = {
+        members: [],
+        locked: false,
+        totalChips: 0,
+        round: 1,
+        turnOrder: [],
+        currentTurnIndex: 0,
+      };
     }
-  ]
-}
+
+    // @ts-ignore
+    const room = rooms[sessionId];
+    room.members = players.map((p) => ({ name: p.name, chips: p.chips ?? 1000 }));
+    room.locked = true;
+
+    io.to(sessionId).emit("update_members", room.members);
+    io.to(sessionId).emit("session_started");
+  });
+});
+
+const clientPath = path.join(__dirname, "../client/build");
+app.use(express.static(clientPath));
+app.get("/", (_, res) => res.sendFile(path.join(clientPath, "index.html")));
+
+const PORT = 3001;
+server.listen(PORT, "0.0.0.0", () => console.log(`✅ Server läuft auf Port ${PORT}`));
+```
+
+````
+npm install express socket.io
+````
+
+````
+npm i --save-dev @types/express
+````
+
+````
+npm install socket.io-client
 ````

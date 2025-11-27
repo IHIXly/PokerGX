@@ -8,8 +8,15 @@ import { getServers } from "dns/promises";
 import { getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useEffect, useRef } from "react";
+import { io } from "socket.io-client";
+import { Socket } from "socket.io-client";
+
 
 export default function PokerRoomPage() {
+
+  
+
   const params = useParams();
   const sessionId = params.id as string;
   const router = useRouter();
@@ -43,6 +50,53 @@ export default function PokerRoomPage() {
     { sessionId },
     { enabled: !!sessionId }
   );
+
+  const socketRef = useRef<Socket | null>(null);
+
+useEffect(() => {
+  const s = io("http://localhost:3001", {
+    transports: ["polling"],  // ← Simple, stable for short sessions
+    path: "/socket.io",
+    withCredentials: false,
+  });
+
+  socketRef.current = s;
+
+  s.on("connect", () => {
+    console.log("✅ Socket connected:", s.id);
+    s.emit("join_session", sessionId);
+  });
+
+  s.on("connect_error", (err) =>
+    console.error("🚫 connect_error:", err.message, err)
+  );
+  s.on("error", (err) => console.error("🚫 socket error:", err));
+
+  s.on("session_started", () => {
+    console.log("🎉 session_started");
+    router.push(`/room/${sessionId}/game`);
+  });
+  s.on("update_members", (members) => {
+    console.log("👥 update_members:", members);
+  });
+
+  return () => {
+    s.disconnect();
+    socketRef.current = null;
+  };
+}, [sessionId, router]);
+
+const handleStartSession = () => {
+  if (!session || !socketRef.current) return;
+
+  socketRef.current.emit("start_session", {
+    sessionId,
+    players: session.users.map((u) => ({
+      name: u.user.name ?? "Unbekannt",
+      chips: u.chips,
+    })),
+  });
+};
 
   if (isLoading) {
     return (
@@ -103,7 +157,7 @@ export default function PokerRoomPage() {
         <div className="fixed bottom-6 right-6 flex flex-col items-end space-y-2">
           {/* Spiel starten */}
           <button
-            onClick={() => startSession.mutate({ sessionId })}
+            onClick={handleStartSession}
             disabled={startSession.isLoading}
             className="text-indigo-400 hover:underline disabled:opacity-50"
           >
