@@ -32,6 +32,15 @@ io.on("connection", (socket) => {
   socket.on("join_session", (sessionId) => {
     socket.join(sessionId);
     console.log("👋 Client ist Raum beigetreten:", sessionId, socket.id);
+    // @ts-ignore
+    const room = rooms[sessionId];
+    if (room && room.turnOrder && room.turnOrder.length > 0) {
+      socket.emit("update_turn", {
+        turnOrder: room.turnOrder,
+        currentPlayer: room.turnOrder[room.currentTurnIndex],
+      });
+      socket.emit("update_members", room.members);
+    }
   });
 
   socket.on("start_session", ({ sessionId, players }) => {
@@ -57,9 +66,30 @@ io.on("connection", (socket) => {
     const room = rooms[sessionId];
     room.members = players.map((p) => ({ name: p.name, chips: p.chips ?? 1000 }));
     room.locked = true;
+    room.members.forEach((p) => (p.setchips = 0));
+    room.turnOrder = room.members.map((p) => p.name);
 
     io.to(sessionId).emit("update_members", room.members);
     io.to(sessionId).emit("session_started");
+    io.to(sessionId).emit("update_turn", {
+      turnOrder: room.turnOrder,
+      currentPlayer: room.turnOrder[room.currentTurnIndex],
+    });
+  });
+
+  socket.on("check_call", ({ sessionId, playerName, amount }) => {
+    console.log("📥 check_call received:", { sessionId, playerName });
+    // @ts-ignore
+    const room = rooms[sessionId];
+    const currentPlayer = room.turnOrder[room.currentTurnIndex];
+
+    room.currentTurnIndex = (room.currentTurnIndex + 1) % room.turnOrder.length;
+
+    io.to(sessionId).emit("update_turn", {
+      turnOrder: room.turnOrder,
+      currentPlayer: room.turnOrder[room.currentTurnIndex],
+    });
+
   });
 });
 
