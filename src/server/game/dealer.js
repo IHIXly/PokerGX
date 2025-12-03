@@ -55,7 +55,6 @@ io.on("connection", (socket) => {
       rooms[sessionId] = {
         members: [],
         locked: false,
-        totalChips: 0,
         round: 1,
         turnOrder: [],
         currentTurnIndex: 0,
@@ -88,10 +87,36 @@ io.on("connection", (socket) => {
     io.to(sessionId).emit("update_turn", {
       turnOrder: room.turnOrder,
       currentPlayer: room.turnOrder[room.currentTurnIndex],
-    });
+    }); 
 
   });
+
+  socket.on("fold", ({sessionId, playerName}) => {
+    console.log("📥 fold received:", { sessionId, playerName });
+
+    const room = rooms[sessionId];
+    const currentPlayer = room.turnOrder[room.currentTurnIndex];
+
+    room.turnOrder.splice(room.currentTurnIndex, 1);
+
+    if (room.turnOrder.length === 1) {  
+      WinnerOfTheRound(room.turnOrder[0], sessionId);
+      room.turnOrder = room.members.map((p) => p.name);
+    }
+
+    if (room.currentTurnIndex >= room.turnOrder.length) {
+      room.currentTurnIndex = 0; // Wrap to first player
+    }
+    io.to(sessionId).emit("update_turn", {
+      turnOrder: room.turnOrder,
+      currentPlayer: room.turnOrder[room.currentTurnIndex],
+    });
+  })
 });
+
+function WinnerOfTheRound(winnerName, sessionId) {
+  console.log("🏆 Spieler gewinnt:", winnerName);
+}
 
 const clientPath = path.join(__dirname, "../client/build");
 app.use(express.static(clientPath));

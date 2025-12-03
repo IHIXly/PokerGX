@@ -37,13 +37,7 @@ export default function PokerRoomPage() {
     },
   });
 
-  // neue Mutation, die setChips anpasst
-  const SetChips = api.poker.SetChips.useMutation({
-    onSuccess: () => {
-      utils.poker.getSessionById.invalidate({ sessionId });
-      utils.poker.getSessions.invalidate();
-    },
-  });
+  
 
   // Daten der PokerSession laden
   const { data: session, isLoading } = api.poker.getSessionById.useQuery(
@@ -139,13 +133,7 @@ const handleStartSession = () => {
               </div>
               {session.status === "gestartet" && (
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => SetChips.mutate({ sessionId, amount: 10 })}
-                      disabled={SetChips.isLoading || u.chips < 10}
-                      className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm disabled:opacity-50"
-                    >
-                      +10
-                    </button>
+                    
                   </div>
                 )}
             </li>

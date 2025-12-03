@@ -67,6 +67,13 @@ export default function PokerGamePage() {
     }
   };
 
+  const fold = () => {
+    if (socketRef.current && userName === currentPlayer) {
+      console.log("📤 Emitting fold for:", userName);
+      socketRef.current.emit("fold", { sessionId, playerName: userName });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center text-gray-300">
@@ -84,6 +91,7 @@ export default function PokerGamePage() {
   }
 
   const isMyTurn = userName === currentPlayer;
+  const hasFolded = !turnOrder.includes(userName);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-8">
@@ -95,17 +103,30 @@ export default function PokerGamePage() {
 
       <h2 className="text-xl text-gray-300 mb-4">Spieler am Tisch</h2>
       <ul className="space-y-2 mb-8">
-        {session.users.map((u) => (
-          <li
-            key={u.id}
-            className={`flex justify-between px-4 py-2 rounded ${
-              u.user.name === currentPlayer ? "bg-green-800" : "bg-gray-800"
-            }`}
-          >
-            <span className="font-medium">{u.user.name ?? "Unbekannt"}</span>
-            <span className="text-sm text-indigo-400">{u.chips} Chips</span>
-          </li>
-        ))}
+        {session.users.map((u) => {
+          const playerName = u.user.name ?? "Unbekannt";
+          const isActive = turnOrder.includes(playerName);
+          const isCurrent = playerName === currentPlayer;
+          
+          return (
+            <li
+              key={u.id}
+              className={`flex justify-between px-4 py-2 rounded ${
+                isCurrent
+                  ? "bg-green-800"
+                  : isActive
+                  ? "bg-gray-800"
+                  : "bg-gray-900 opacity-50"
+              }`}
+            >
+              <span className="font-medium">
+                {playerName}
+                {!isActive && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
+              </span>
+              <span className="text-sm text-indigo-400">{u.chips} Chips</span>
+            </li>
+          );
+        })}
       </ul>
 
       <div className="mb-4">
@@ -124,6 +145,18 @@ export default function PokerGamePage() {
         disabled={!isMyTurn}
       >
         Check / Call
+      </button>
+
+      <button
+        className={`px-6 py-3 rounded font-semibold transition ${
+          isMyTurn
+            ? "bg-red-600 hover:bg-red-700 cursor-pointer"
+            : "bg-gray-600 cursor-not-allowed opacity-50"
+        }`}
+        onClick={fold}
+        disabled={!isMyTurn}
+      >
+        Fold
       </button>
     </main>
   );
