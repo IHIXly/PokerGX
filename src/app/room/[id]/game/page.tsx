@@ -17,6 +17,7 @@ export default function PokerGamePage() {
   );
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState("");
+  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number }>>([]);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -45,6 +46,7 @@ export default function PokerGamePage() {
 
     socket.on("update_members", (members) => {
       console.log("🔄 Members update:", members);
+      setMembers(members);
     });
 
     socket.on("update_turn", ({ turnOrder, currentPlayer }) => {
@@ -107,6 +109,9 @@ export default function PokerGamePage() {
           const playerName = u.user.name ?? "Unbekannt";
           const isActive = turnOrder.includes(playerName);
           const isCurrent = playerName === currentPlayer;
+          const member = members.find((m) => m.name === playerName);
+          const chips = member?.chips ?? u.chips;
+          const settedChips = member?.settedChips ?? 0;
           
           return (
             <li
@@ -123,7 +128,8 @@ export default function PokerGamePage() {
                 {playerName}
                 {!isActive && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
               </span>
-              <span className="text-sm text-indigo-400">{u.chips} Chips</span>
+              <span className="text-sm text-indigo-400">{chips} Chips</span>
+              <span className="text-sm text-indigo-400">{settedChips} Gesetzt</span>
             </li>
           );
         })}
