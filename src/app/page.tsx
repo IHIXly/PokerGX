@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import SessionSettings from "./components/SessionSettings";
+import SessionCode from "./components/SessionCode";
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -16,6 +17,7 @@ export default function HomePage() {
   const utils = api.useUtils();
 
   const [showSettings, setShowSettings] = useState(false);
+  const [sessionCode, setSessionCode] = useState(false);
 
   /*
   const createSession = api.poker.createSession.useMutation({
@@ -72,7 +74,10 @@ export default function HomePage() {
 
         {/* RECHTS → Buttons gruppieren */}   
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 bg-gray-600 hover:bg-indigo-700 px-4 py-2 rounded-lg">
+          <button
+            onClick={() => setSessionCode(true)}
+            className="flex items-center gap-2 bg-gray-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
+          >
             Join
           </button>
 
@@ -147,7 +152,7 @@ export default function HomePage() {
       </div>
     </motion.li>
   );
-})}
+  })}
           </ul>
         ) : (
           <p className="text-gray-500">Keine Sessions gefunden.</p>
@@ -157,6 +162,11 @@ export default function HomePage() {
         <SessionSettings
           user={session.user as { name: string; image?: string; chips: number, id: string }}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+       {sessionCode && (
+        <SessionCode
+          onClose={() => setSessionCode(false)}
         />
       )}
     </main>

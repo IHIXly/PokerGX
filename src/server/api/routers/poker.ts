@@ -126,7 +126,7 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Das Spiel ist bereits gestartet.");
       }
 
-      // Check: ist User schon drin?
+      // Prüfen ob User schon drin ist
       const existing = await ctx.db.pokerSessionUser.findFirst({
         where: { pokerSessionId: input.sessionId, userId },
       });
@@ -143,6 +143,51 @@ export const pokerRouter = createTRPCRouter({
 
       return { sessionId: input.sessionId };
     }),
+
+  // ✅ Session per Code beitreten
+  joinSessionByCode: protectedProcedure
+    .input(z.object({ sessionCode: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+
+      const userId = ctx.session.user.id;
+
+    const parsedCode = parseInt(input.sessionCode);
+
+    if (isNaN(parsedCode)) {
+      throw new Error("Ungültiger Code.");
+    }
+
+    // Session per Code finden
+    const session = await ctx.db.pokerSession.findUnique({
+      where: { sessionCode: parsedCode },
+    });
+
+      if (!session) {
+        throw new Error("Ungültiger Session-Code.");
+      }
+
+      if (session.status === "gestartet") {
+        throw new Error("Das Spiel ist bereits gestartet.");
+      }
+
+      // Prüfen ob User schon drin ist
+      const existing = await ctx.db.pokerSessionUser.findFirst({
+        where: { pokerSessionId: session.id, userId },
+      });
+
+      if (!existing) {
+        await ctx.db.pokerSessionUser.create({
+          data: {
+            userId,
+            pokerSessionId: session.id,
+            chips: ctx.session.user.chips ?? 1000,
+          },
+        });
+      }
+
+      return { sessionId: session.id };
+  }),
+
 
   // ✅ Spiel starten
   startSession: protectedProcedure
@@ -164,17 +209,27 @@ export const pokerRouter = createTRPCRouter({
       orderBy: { createdAt: "desc" },
       where: {
         OR: [
-          { private: false }, // public sessions  → für alle sichtbar
-          {                   // private sessions → nur für Ersteller
+          { private: false }, // public sessions für alle sichtbar
+
+          { // private sessions → nur Ersteller
             AND: [
               { private: true },
               { createdBy: ctx.session.user.id }
             ]
+          },
+
+          { // Sessions, denen der User bereits beigetreten ist
+            users: {
+              some: {
+                userId: ctx.session.user.id
+              }
+            }
           }
         ]
-},
+      },
     });
   }),
+
 
   updateChips: protectedProcedure
   .input(z.object({ chips: z.number().min(0).max(1_000_000) }))

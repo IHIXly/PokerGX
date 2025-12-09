@@ -18,7 +18,6 @@ export default function SessionSettings({
   const [chips, setChips] = useState(user.chips);
   const [name, setName] = useState("");
   const [privatelobby, setChecked] = useState(false);
-  const [createdBy, setCreatedBy] = useState(user.id);
 
   // tRPC Mutation für Chips-Update
   const updateChips = api.poker.updateChips.useMutation({
