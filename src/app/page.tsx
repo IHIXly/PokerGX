@@ -17,9 +17,11 @@ export default function HomePage() {
 
   const [showSettings, setShowSettings] = useState(false);
 
+  /*
   const createSession = api.poker.createSession.useMutation({
     onSuccess: () => utils.poker.getSessions.invalidate(),
   });
+  */
 
   const joinSession = api.poker.joinSession.useMutation({ //PokerSession beitreten
     onSuccess: (data) => {
@@ -65,27 +67,32 @@ export default function HomePage() {
 
         {/* Kopfbereich */}
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-semibold">Deine Poker-Sessions</h2>
+        {/* LINKS */}
+        <h2 className="text-2xl font-semibold">Deine Poker-Sessions</h2>
+
+        {/* RECHTS → Buttons gruppieren */}   
+        <div className="flex items-center gap-3">
+          <button className="flex items-center gap-2 bg-gray-600 hover:bg-indigo-700 px-4 py-2 rounded-lg">
+            Join
+          </button>
+
           <button
-            onClick={() => {
-              //const name = prompt("Wie soll deine Session heißen?");
-              //if (name) createSession.mutate({ name });
-              setShowSettings(true);
-            }}
+            onClick={() => setShowSettings(true)}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
           >
-            <Plus size={18} />
-            Neue Session
+          <Plus size={18} />
+          Neue Session
           </button>
         </div>
+      </div>
 
-        {/* Sessions-List */}
-        {isLoading ? (
-          <p>Lade Sessions...</p>
-        ) : sessions?.length ? (
-          <ul className="space-y-4">
-            {sessions.map((s) => {
-  const isHost = s.users[0]?.user.id === session.user.id;
+    {/* Sessions-List */}
+    {isLoading ? (
+      <p>Lade Sessions...</p>
+    ) : sessions?.length ? (
+      <ul className="space-y-4">
+        {sessions.map((s) => {
+        const isHost = s.users[0]?.user.id === session.user.id;
 
   return (
     <motion.li
@@ -148,7 +155,7 @@ export default function HomePage() {
       </motion.div>
       {showSettings && (
         <SessionSettings
-          user={session.user as { name: string; image?: string; chips: number }}
+          user={session.user as { name: string; image?: string; chips: number, id: string }}
           onClose={() => setShowSettings(false)}
         />
       )}

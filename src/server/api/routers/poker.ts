@@ -1,17 +1,22 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { Session } from "inspector/promises";
 import { z } from "zod";
 
 export const pokerRouter = createTRPCRouter({
   // ✅ Neue Session erstellen
   createSession: protectedProcedure
-    .input(z.object({ name: z.string().min(3).max(50) }))
+    .input(z.object({ name: z.string().min(3).max(50), privateSession: z.boolean().default(false), createdBy: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      console.log("RECEIVED INPUT:", input);  // <—— TEST HIER
       const userId = ctx.session.user.id;
 
       // Session anlegen
       const session = await ctx.db.pokerSession.create({
         data: {
           name: input.name,
+          private: input.privateSession,
+          createdBy: input.createdBy,
+          sessionCode: Math.floor(Math.random() * 1000000), // Zufälliger 6-stelliger Code
           status: "laufend",
           users: {
             create: {
@@ -157,6 +162,17 @@ export const pokerRouter = createTRPCRouter({
     return ctx.db.pokerSession.findMany({
       include: { users: { include: { user: true } } },
       orderBy: { createdAt: "desc" },
+      where: {
+        OR: [
+          { private: false }, // public sessions  → für alle sichtbar
+          {                   // private sessions → nur für Ersteller
+            AND: [
+              { private: true },
+              { createdBy: ctx.session.user.id }
+            ]
+          }
+        ]
+},
     });
   }),
 

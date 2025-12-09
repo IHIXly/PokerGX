@@ -47,11 +47,11 @@ export default function PokerRoomPage() {
 
   const socketRef = useRef<Socket | null>(null);
 
-useEffect(() => {
-  const s = io("http://localhost:3001", {
-    transports: ["polling"],  // ← Simple, stable for short sessions
-    path: "/socket.io",
-    withCredentials: false,
+  useEffect(() => {
+    const s = io("http://localhost:3001", {
+      transports: ["polling"],  // ← Simple, stable for short sessions
+      path: "/socket.io",
+      withCredentials: false,
   });
 
   socketRef.current = s;
@@ -111,6 +111,16 @@ const handleStartSession = () => {
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-10">
       <h1 className="text-4xl font-bold mb-8">{session.name}</h1>
+      <h2 className="text-gray-400 mb-4">
+        Session-Code: <span className="text-indigo-400">{session.sessionCode}</span>
+      </h2>
+      
+      <p className="text-gray-400 mb-4">
+        {session.private ? "Private Lobby" : "Öffentliche Lobby"}
+      </p>
+      <p className="text-gray-400 mb-4">
+        Ersteller: {session.users[0]?.user.name ?? "Unbekannt"}
+      </p>
 
       <p className="text-gray-400 mb-6">Status: {session.status}</p>
 
@@ -146,19 +156,19 @@ const handleStartSession = () => {
           {/* Spiel starten */}
           <button
             onClick={handleStartSession}
-            disabled={startSession.isLoading}
+            disabled={startSession.isPending}
             className="text-indigo-400 hover:underline disabled:opacity-50"
           >
-            {startSession.isLoading ? "Startet..." : "Spiel starten"}
+            {startSession.isPending ? "Startet..." : "Spiel starten"}
           </button>
 
           {/* Verlassen */}
           <button
             onClick={() => leaveSession.mutate({ sessionId })}
-            disabled={leaveSession.isLoading}
+            disabled={leaveSession.isPending}
             className="text-indigo-400 hover:underline disabled:opacity-50"
           >
-            {leaveSession.isLoading ? "Verlasse..." : "Verlassen"}
+            {leaveSession.isPending ? "Verlasse..." : "Verlassen"}
           </button>
         </div>
       )}
