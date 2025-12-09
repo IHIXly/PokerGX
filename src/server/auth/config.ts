@@ -1,6 +1,10 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { DefaultSession, NextAuthConfig } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
+import GitHubProvider from "next-auth/providers/github"; // 👈 hinzugefügt
+
+import CredentialsProvider from "next-auth/providers/credentials"; //Für Gast login
+import { randomUUID } from "crypto";
 
 import { db } from "@/server/db";
 
@@ -14,15 +18,12 @@ declare module "next-auth" {
 	interface Session extends DefaultSession {
 		user: {
 			id: string;
+			chips:number;
 			// ...other properties
 			// role: UserRole;
 		} & DefaultSession["user"];
 	}
 
-	// interface User {
-	//   // ...other properties
-	//   // role: UserRole;
-	// }
 }
 
 /**
@@ -31,26 +32,58 @@ declare module "next-auth" {
  * @see https://next-auth.js.org/configuration/options
  */
 export const authConfig = {
-	providers: [
-		DiscordProvider,
-		/**
-		 * ...add more providers here.
-		 *
-		 * Most other providers require a bit more work than the Discord provider. For example, the
-		 * GitHub provider requires you to add the `refresh_token_expires_in` field to the Account
-		 * model. Refer to the NextAuth.js docs for the provider you want to use. Example:
-		 *
-		 * @see https://next-auth.js.org/providers/github
-		 */
-	],
-	adapter: PrismaAdapter(db),
-	callbacks: {
-		session: ({ session, user }) => ({
-			...session,
-			user: {
-				...session.user,
-				id: user.id,
-			},
-		}),
-	},
+  providers: [
+    DiscordProvider,
+    GitHubProvider,
+    CredentialsProvider({
+      name: "Guest Login",
+      credentials: {},
+      async authorize() {
+        const user = await db.user.create({
+          data: {
+            name: `Guest_${Math.floor(Math.random() * 10000)}`,
+            email: `guest_${randomUUID()}@poker.local`,
+            chips: 1000,
+            image: "/Guest.png",
+          },
+        });
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          chips: user.chips,
+          image: user.image,
+        };
+      },
+    }),
+  ],
+  adapter: PrismaAdapter(db),
+  session: {
+    strategy: "jwt", // ⚡ wichtig!
+  },
+  pages: {
+    signIn: "/login", // 👈 schickt nicht eingeloggte User zur Login-Seite
+  },
+  callbacks: {
+    // ⚙️ JWT Callback: Wird jedes Mal beim Token-Erstellen oder Aktualisieren aufgerufen
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.chips = user.chips ?? 1000;
+        token.image = user.image || "/Guest.png";
+      }
+      return token;
+    },
+
+    // ⚙️ Session Callback: Baut das Session-Objekt, das du im Frontend bekommst
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id as string;
+        session.user.chips = token.chips as number;
+        session.user.image = token.image as string;
+      }
+      return session;
+    },
+  },
 } satisfies NextAuthConfig;
