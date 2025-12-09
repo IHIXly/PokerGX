@@ -7,16 +7,15 @@ export const pokerRouter = createTRPCRouter({
   createSession: protectedProcedure
     .input(z.object({ name: z.string().min(3).max(50), privateSession: z.boolean().default(false), createdBy: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      console.log("RECEIVED INPUT:", input);  // <—— TEST HIER
+      console.log("RECEIVED INPUT:", input);
       const userId = ctx.session.user.id;
 
-      // Session anlegen
       const session = await ctx.db.pokerSession.create({
         data: {
           name: input.name,
           private: input.privateSession,
           createdBy: input.createdBy,
-          sessionCode: Math.floor(Math.random() * 1000000), // Zufälliger 6-stelliger Code
+          sessionCode: Math.floor(Math.random() * 1000000),
           status: "laufend",
           users: {
             create: {
@@ -29,16 +28,15 @@ export const pokerRouter = createTRPCRouter({
         include: { users: { include: { user: true } } },
       });
 
-      return {session, sessionID: session.id};
+      return { session, sessionID: session.id };
     }),
 
-    // ✅ Session beenden
+  // ✅ Session beenden
   endSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      // Prüfen, ob User Teil der Session ist
       const userSession = await ctx.db.pokerSessionUser.findFirst({
         where: {
           userId,
@@ -51,7 +49,6 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Du bist nicht Teil dieser Session.");
       }
 
-      // Nur der Ersteller darf beenden (erster User in der Session gilt als Host)
       const firstUser = await ctx.db.pokerSessionUser.findFirst({
         where: { pokerSessionId: input.sessionId },
         orderBy: { id: "asc" },
@@ -61,19 +58,18 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Nur der Host darf die Session beenden.");
       }
 
-      // Session-Status ändern
       return await ctx.db.pokerSession.update({
         where: { id: input.sessionId },
         data: { status: "beendet" },
       });
     }),
 
-    clearSession: protectedProcedure //✅ Session löschen (Host only (test))
+  // ✅ Session löschen (Host only)
+  clearSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      // Prüfen, ob User Teil der Session ist
       const userSession = await ctx.db.pokerSessionUser.findMany({
         where: {
           userId,
@@ -86,7 +82,6 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Du bist nicht Teil dieser Session.");
       }
 
-      // Nur der Ersteller darf löschen (erster User in der Session gilt als Host)
       const firstUser = await ctx.db.pokerSessionUser.findFirst({
         where: { pokerSessionId: input.sessionId },
         orderBy: { id: "asc" },
@@ -96,7 +91,6 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Nur der Host darf die Session löschen.");
       }
 
-      // Session löschen
       await ctx.db.pokerSessionUser.deleteMany({
         where: { pokerSessionId: input.sessionId },
       });
@@ -106,13 +100,12 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-   // ✅ Session beitreten
+  // ✅ Session beitreten
   joinSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      // Check: Status der Session
       const session = await ctx.db.pokerSession.findUnique({
         where: { id: input.sessionId },
         select: { status: true },
@@ -126,7 +119,6 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Das Spiel ist bereits gestartet.");
       }
 
-      // Prüfen ob User schon drin ist
       const existing = await ctx.db.pokerSessionUser.findFirst({
         where: { pokerSessionId: input.sessionId, userId },
       });
@@ -148,19 +140,16 @@ export const pokerRouter = createTRPCRouter({
   joinSessionByCode: protectedProcedure
     .input(z.object({ sessionCode: z.string() }))
     .mutation(async ({ ctx, input }) => {
-
       const userId = ctx.session.user.id;
+      const parsedCode = parseInt(input.sessionCode);
 
-    const parsedCode = parseInt(input.sessionCode);
+      if (isNaN(parsedCode)) {
+        throw new Error("Ungültiger Code.");
+      }
 
-    if (isNaN(parsedCode)) {
-      throw new Error("Ungültiger Code.");
-    }
-
-    // Session per Code finden
-    const session = await ctx.db.pokerSession.findUnique({
-      where: { sessionCode: parsedCode },
-    });
+      const session = await ctx.db.pokerSession.findUnique({
+        where: { sessionCode: parsedCode },
+      });
 
       if (!session) {
         throw new Error("Ungültiger Session-Code.");
@@ -170,7 +159,6 @@ export const pokerRouter = createTRPCRouter({
         throw new Error("Das Spiel ist bereits gestartet.");
       }
 
-      // Prüfen ob User schon drin ist
       const existing = await ctx.db.pokerSessionUser.findFirst({
         where: { pokerSessionId: session.id, userId },
       });
@@ -186,8 +174,7 @@ export const pokerRouter = createTRPCRouter({
       }
 
       return { sessionId: session.id };
-  }),
-
+    }),
 
   // ✅ Spiel starten
   startSession: protectedProcedure
@@ -195,7 +182,6 @@ export const pokerRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      // Status auf "gestartet" setzen
       return await ctx.db.pokerSession.update({
         where: { id: input.sessionId },
         data: { status: "gestartet" },
@@ -209,51 +195,48 @@ export const pokerRouter = createTRPCRouter({
       orderBy: { createdAt: "desc" },
       where: {
         OR: [
-          { private: false }, // public sessions für alle sichtbar
-
-          { // private sessions → nur Ersteller
+          { private: false },
+          {
             AND: [
               { private: true },
-              { createdBy: ctx.session.user.id }
-            ]
+              { createdBy: ctx.session.user.id },
+            ],
           },
-
-          { // Sessions, denen der User bereits beigetreten ist
+          {
             users: {
               some: {
-                userId: ctx.session.user.id
-              }
-            }
-          }
-        ]
+                userId: ctx.session.user.id,
+              },
+            },
+          },
+        ],
       },
     });
   }),
 
-
+  // ✅ Chips aktualisieren
   updateChips: protectedProcedure
-  .input(z.object({ chips: z.number().min(0).max(1_000_000) }))
-  .mutation(async ({ ctx, input }) => {
-    const userId = ctx.session.user.id;
+    .input(z.object({ chips: z.number().min(0).max(1_000_000) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
 
-    const updated = await ctx.db.user.update({
-      where: { id: userId },
-      data: { chips: input.chips },
-    });
+      const updated = await ctx.db.user.update({
+        where: { id: userId },
+        data: { chips: input.chips },
+      });
 
-    return { chips: updated.chips };
-  }),
+      return { chips: updated.chips };
+    }),
 
-  getSessionById: protectedProcedure //provisorisch!!
-  .input(z.object({ sessionId: z.string() }))
-  .query(async ({ ctx, input }) => {
-    return ctx.db.pokerSession.findUnique({
-      where: { id: input.sessionId },
-      include: {
-        users: { include: { user: true } },
-      },
-    });
-  }),
-
-  
+  // ✅ Session nach ID abrufen
+  getSessionById: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db.pokerSession.findUnique({
+        where: { id: input.sessionId },
+        include: {
+          users: { include: { user: true } },
+        },
+      });
+    }),
 });

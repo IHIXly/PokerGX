@@ -1,5 +1,4 @@
-// src/app/page.tsx Main Page
-
+//Homepage
 "use client";
 
 import { useSession } from "next-auth/react";
@@ -19,17 +18,11 @@ export default function HomePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [sessionCode, setSessionCode] = useState(false);
 
-  /*
-  const createSession = api.poker.createSession.useMutation({
-    onSuccess: () => utils.poker.getSessions.invalidate(),
-  });
-  */
-
-  const joinSession = api.poker.joinSession.useMutation({ //PokerSession beitreten
+  const joinSession = api.poker.joinSession.useMutation({
     onSuccess: (data) => {
-    utils.poker.getSessions.invalidate();
-    router.push(`/room/${data.sessionId}`); //zur PokerRoomPage wechseln, mit ID
-  },
+      utils.poker.getSessions.invalidate();
+      router.push(`/room/${data.sessionId}`);
+    },
   });
 
   const endSession = api.poker.endSession.useMutation({
@@ -39,7 +32,6 @@ export default function HomePage() {
   const clearSession = api.poker.clearSession.useMutation({
     onSuccess: () => utils.poker.getSessions.invalidate(),
   });
-
 
   const { data: sessions, isLoading } = api.poker.getSessions.useQuery(undefined, {
     enabled: !!session,
@@ -53,7 +45,7 @@ export default function HomePage() {
     );
   }
 
-  if (!session) return null; // Wird von der Middleware abgefangen, falls nicht eingeloggt
+  if (!session) return null;
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-10">
@@ -69,105 +61,103 @@ export default function HomePage() {
 
         {/* Kopfbereich */}
         <div className="flex justify-between items-center mb-6">
-        {/* LINKS */}
-        <h2 className="text-2xl font-semibold">Deine Poker-Sessions</h2>
+          <h2 className="text-2xl font-semibold">Deine Poker-Sessions</h2>
 
-        {/* RECHTS → Buttons gruppieren */}   
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSessionCode(true)}
-            className="flex items-center gap-2 bg-gray-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
-          >
-            Join
-          </button>
+          {/* RECHTS → Buttons gruppieren */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSessionCode(true)}
+              className="flex items-center gap-2 bg-gray-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
+            >
+              Join
+            </button>
 
-          <button
-            onClick={() => setShowSettings(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
-          >
-          <Plus size={18} />
-          Neue Session
-          </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg"
+            >
+              <Plus size={18} />
+              Neue Session
+            </button>
+          </div>
         </div>
-      </div>
 
-    {/* Sessions-List */}
-    {isLoading ? (
-      <p>Lade Sessions...</p>
-    ) : sessions?.length ? (
-      <ul className="space-y-4">
-        {sessions.map((s) => {
-        const isHost = s.users[0]?.user.id === session.user.id;
+        {/* Sessions-List */}
+        {isLoading ? (
+          <p>Lade Sessions...</p>
+        ) : sessions?.length ? (
+          <ul className="space-y-4">
+            {sessions.map((s) => {
+              const isHost = s.users[0]?.user.id === session.user.id;
 
-  return (
-    <motion.li
-      key={s.id}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="bg-gray-800 p-4 rounded-lg flex justify-between items-center"
-    >
-      <div>
-        <strong>{s.name}</strong>{" "}
-        —{" "}
-        <em
-          className={`${
-            s.status === "beendet" ? "text-red-400" : "text-gray-400"
-          }`}
-        >
-          {s.status}
-        </em>
-        <div className="text-sm text-gray-400 mt-1">
-          Spieler: {s.users.map((u) => u.user.name ?? "Unbekannt").join(", ")}
-        </div>
-      </div>
+              return (
+                <motion.li
+                  key={s.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-gray-800 p-4 rounded-lg flex justify-between items-center"
+                >
+                  <div>
+                    <strong>{s.name}</strong> — 
+                    <em
+                      className={`${
+                        s.status === "beendet" ? "text-red-400" : "text-gray-400"
+                      }`}
+                    >
+                      {s.status}
+                    </em>
+                    <div className="text-sm text-gray-400 mt-1">
+                      Spieler: {s.users.map((u) => u.user.name ?? "Unbekannt").join(", ")}
+                    </div>
+                  </div>
 
-      <div className="flex items-center gap-4">
-        {s.status !== "beendet" && (
-          <button
-            className="text-indigo-400 hover:underline"
-            onClick={() => joinSession.mutate({ sessionId: s.id })} //zur Poker Seite wechseln mit ID
-          >
-            Beitreten
-          </button>
-        )}
+                  <div className="flex items-center gap-4">
+                    {s.status !== "beendet" && (
+                      <button
+                        className="text-indigo-400 hover:underline"
+                        onClick={() => joinSession.mutate({ sessionId: s.id })}
+                      >
+                        Beitreten
+                      </button>
+                    )}
 
-        {isHost && s.status !== "beendet" && (
-          <button
-            onClick={() => endSession.mutate({ sessionId: s.id })}
-            className="text-red-400 hover:underline"
-          >
-            Beenden
-          </button>
-        )}
+                    {isHost && s.status !== "beendet" && (
+                      <button
+                        onClick={() => endSession.mutate({ sessionId: s.id })}
+                        className="text-red-400 hover:underline"
+                      >
+                        Beenden
+                      </button>
+                    )}
 
-        {isHost && s.status == "beendet" && (
-          <button
-            onClick={() => clearSession.mutate({ sessionId: s.id })}
-            className="text-indigo-400 fixed bottom-6 right-6 mt-6 hover:underline"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-    </motion.li>
-  );
-  })}
+                    {isHost && s.status == "beendet" && (
+                      <button
+                        onClick={() => clearSession.mutate({ sessionId: s.id })}
+                        className="text-indigo-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </motion.li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-gray-500">Keine Sessions gefunden.</p>
         )}
       </motion.div>
+
       {showSettings && (
         <SessionSettings
-          user={session.user as { name: string; image?: string; chips: number, id: string }}
+          user={session.user as { name: string; image?: string; chips: number; id: string }}
           onClose={() => setShowSettings(false)}
         />
       )}
-       {sessionCode && (
-        <SessionCode
-          onClose={() => setSessionCode(false)}
-        />
+
+      {sessionCode && (
+        <SessionCode onClose={() => setSessionCode(false)} />
       )}
     </main>
   );
