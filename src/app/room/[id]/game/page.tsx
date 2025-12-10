@@ -17,7 +17,7 @@ export default function PokerGamePage() {
   );
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState("");
-  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number }>>([]);
+  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean }>>([]);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -112,6 +112,7 @@ export default function PokerGamePage() {
           const member = members.find((m) => m.name === playerName);
           const chips = member?.chips ?? u.chips;
           const settedChips = member?.settedChips ?? 0;
+          const checked = member?.checked ?? false;
           
           return (
             <li
@@ -127,6 +128,7 @@ export default function PokerGamePage() {
               <span className="font-medium">
                 {playerName}
                 {!isActive && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
+                {checked && isActive && <span className="ml-2 text-green-400 text-sm">(Gecheckt)</span>}
               </span>
               <span className="text-sm text-indigo-400">{chips} Chips</span>
               <span className="text-sm text-indigo-400">{settedChips} Gesetzt</span>

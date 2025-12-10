@@ -27,6 +27,7 @@ interface Player {
   name: string;
   chips: number;
   settedChips: number;
+  checked: boolean;
 }
 
 interface Room {
@@ -94,9 +95,10 @@ io.on("connection", (socket: Socket) => {
       name: p.name,
       chips: p.chips ?? 1000,
       settedChips: 0,
+      checked: false,
      }));
     room.locked = true;
-    room.members.forEach((p) => (p.settedChips = 0));
+    room.members.forEach((p) => (p.settedChips = 0, p.checked = false));
     room.turnOrder = room.members.map((p) => p.name);
 
     io.to(sessionId).emit("update_members", room.members);
@@ -126,9 +128,13 @@ io.on("connection", (socket: Socket) => {
     console.log(`📊 ${playerName} has ${currentPlayerBet}, needs to call ${amountToCall} to match ${maxSettedChips}`);
 
     if (member && amountToCall > 0) {
-      ChipsTransfer(room, sessionId, member, amountToCall);
+        ChipsTransfer(room, sessionId, member, amountToCall);
+        
     }
-      
+    if (member) {
+      CheckThePlayers(room, sessionId, member);
+    }
+
     NextTurn(room, sessionId, 1);
      
   });
@@ -141,9 +147,12 @@ io.on("connection", (socket: Socket) => {
 
     room.turnOrder.splice(room.currentTurnIndex, 1);
 
+    // Check if only one player remains
     if (room.turnOrder.length === 1) {  
       WinnerOfTheRound(room, sessionId);
     }
+
+    
 
     if (room.currentTurnIndex >= room.turnOrder.length) {
       room.currentTurnIndex = 0; // Wrap to first player
@@ -159,6 +168,14 @@ io.on("connection", (socket: Socket) => {
     if (turnSteps) {
       room.currentTurnIndex = (room.currentTurnIndex + turnSteps) % room.turnOrder.length;
     }
+
+    // Check if all players in turnOrder have checked
+    if (room.turnOrder.every((playerName) => {
+      const player = room.members.find((p) => p.name === playerName);
+      return player?.checked ?? false;
+    })) {
+        NextPhase(room, sessionId);
+    } 
     
     io.to(sessionId).emit("update_turn", {
       turnOrder: room.turnOrder,
@@ -173,9 +190,19 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("update_members", room.members);
   }
 
+  function CheckThePlayers(room: Room, sessionId: string, player: Player): void {
+    player.checked = true;
+    io.to(sessionId).emit("update_members", room.members);
+  }
+
   function StartNewRound(room: Room, sessionId: string): void {
     room.phase = 0;
     NextPhase(room, sessionId);
+  }
+
+  function KillCheckedStatus(room: Room, sessionId: string): void {
+    room.members.forEach((p) => (p.checked = false));
+    io.to(sessionId).emit("update_members", room.members);
   }
 
   function WinnerOfTheRound(room: Room, sessionId: string): void {
@@ -217,8 +244,9 @@ io.on("connection", (socket: Socket) => {
   function NextPhase(room: Room, sessionId: string): void {
     console.log("🔄 Neue Runde startet in Session:", sessionId);
     room.phase += 1;
-
-
+    
+    KillCheckedStatus(room, sessionId);
+    
     switch (room.phase) {
     case 1:
       // Zwei Karten für jeden Spieler werden ausgeteilt
@@ -262,6 +290,8 @@ io.on("connection", (socket: Socket) => {
       console.log("Unbekannte Phase");
     
     }
+    // Emit update to all clients
+    io.to(sessionId).emit("update_members", room.members);
   }
 });
 
