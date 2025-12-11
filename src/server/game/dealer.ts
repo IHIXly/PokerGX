@@ -161,6 +161,20 @@ io.on("connection", (socket: Socket) => {
     NextTurn(room, sessionId, 0);
   })
 
+  socket.on("raise", ({ sessionId, playerName, amount }: CheckCallData) => {
+    console.log("📥 raise received:", { sessionId, playerName, amount });
+    const room = rooms[sessionId];
+    if (!room) return;
+    const member = room.members.find((m) => m.name === playerName);
+
+    if (member) {
+        ChipsTransfer(room, sessionId, member, amount ?? 0);
+        KillCheckedStatus(room, sessionId);
+        CheckThePlayers(room, sessionId, member);
+        NextTurn(room, sessionId, 1);
+    }
+    });
+
 
   function NextTurn(room: Room, sessionId: string, turnSteps: number): void {
     console.log("➡️ Nächster Spieler ist dran in Session:", sessionId);
@@ -246,7 +260,7 @@ io.on("connection", (socket: Socket) => {
     room.phase += 1;
     
     KillCheckedStatus(room, sessionId);
-    
+
     switch (room.phase) {
     case 1:
       // Zwei Karten für jeden Spieler werden ausgeteilt

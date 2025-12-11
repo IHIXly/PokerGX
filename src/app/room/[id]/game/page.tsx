@@ -18,6 +18,7 @@ export default function PokerGamePage() {
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState("");
   const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean }>>([]);
+  const [raiseAmount, setRaiseAmount] = useState(0);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -69,6 +70,13 @@ export default function PokerGamePage() {
     }
   };
 
+  const raise = () => {
+    if (socketRef.current && userName === currentPlayer && raiseAmount > 0) {
+      console.log("📤 Emitting check_call (raise) for:", userName, "amount:", raiseAmount);
+      socketRef.current.emit("raise", { sessionId, playerName: userName, amount: raiseAmount });
+    }
+  };
+
   const fold = () => {
     if (socketRef.current && userName === currentPlayer) {
       console.log("📤 Emitting fold for:", userName);
@@ -94,6 +102,19 @@ export default function PokerGamePage() {
 
   const isMyTurn = userName === currentPlayer;
   const hasFolded = !turnOrder.includes(userName);
+
+  // Calculate minimum raise amount
+  const myMember = members.find((m) => m.name === userName);
+  const maxSettedChips = Math.max(...members.map((m) => m.settedChips), 0);
+  const mySettedChips = myMember?.settedChips ?? 0;
+  const minRaise = maxSettedChips - mySettedChips + 1;
+
+  // Update raiseAmount when minimum changes
+  useEffect(() => {
+    if (raiseAmount < minRaise) {
+      setRaiseAmount(minRaise);
+    }
+  }, [minRaise]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-8">
@@ -143,29 +164,70 @@ export default function PokerGamePage() {
         </p>
       </div>
 
-      <button
-        className={`px-6 py-3 rounded font-semibold transition ${
-          isMyTurn
-            ? "bg-green-600 hover:bg-green-700 cursor-pointer"
-            : "bg-gray-600 cursor-not-allowed opacity-50"
-        }`}
-        onClick={checkCall}
-        disabled={!isMyTurn}
-      >
-        Check / Call
-      </button>
+      <div className="flex gap-4 mb-6">
+        <button
+          className={`px-6 py-3 rounded font-semibold transition ${
+            isMyTurn
+              ? "bg-green-600 hover:bg-green-700 cursor-pointer"
+              : "bg-gray-600 cursor-not-allowed opacity-50"
+          }`}
+          onClick={checkCall}
+          disabled={!isMyTurn}
+        >
+          Check / Call
+        </button>
 
-      <button
-        className={`px-6 py-3 rounded font-semibold transition ${
-          isMyTurn
-            ? "bg-red-600 hover:bg-red-700 cursor-pointer"
-            : "bg-gray-600 cursor-not-allowed opacity-50"
-        }`}
-        onClick={fold}
-        disabled={!isMyTurn}
-      >
-        Fold
-      </button>
+        <div className="flex items-center gap-2">
+          <button
+            className={`px-4 py-3 rounded font-semibold transition ${
+              isMyTurn
+                ? "bg-yellow-600 hover:bg-yellow-700 cursor-pointer"
+                : "bg-gray-600 cursor-not-allowed opacity-50"
+            }`}
+            onClick={() => setRaiseAmount(Math.max(minRaise, raiseAmount - 1))}
+            disabled={!isMyTurn}
+          >
+            -
+          </button>
+          <div className="px-4 py-3 bg-gray-800 rounded min-w-[80px] text-center">
+            {raiseAmount}
+          </div>
+          <button
+            className={`px-4 py-3 rounded font-semibold transition ${
+              isMyTurn
+                ? "bg-yellow-600 hover:bg-yellow-700 cursor-pointer"
+                : "bg-gray-600 cursor-not-allowed opacity-50"
+            }`}
+            onClick={() => setRaiseAmount(raiseAmount + 1)}
+            disabled={!isMyTurn}
+          >
+            +
+          </button>
+          <button
+            className={`px-6 py-3 rounded font-semibold transition ${
+              isMyTurn
+                ? "bg-yellow-600 hover:bg-yellow-700 cursor-pointer"
+                : "bg-gray-600 cursor-not-allowed opacity-50"
+            }`}
+            onClick={raise}
+            disabled={!isMyTurn}
+          >
+            Raise
+          </button>
+        </div>
+
+        <button
+          className={`px-6 py-3 rounded font-semibold transition ${
+            isMyTurn
+              ? "bg-red-600 hover:bg-red-700 cursor-pointer"
+              : "bg-gray-600 cursor-not-allowed opacity-50"
+          }`}
+          onClick={fold}
+          disabled={!isMyTurn}
+        >
+          Fold
+        </button>
+      </div>
     </main>
   );
 }
