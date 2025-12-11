@@ -28,6 +28,7 @@ interface Player {
   chips: number;
   settedChips: number;
   checked: boolean;
+  allIn: boolean;
 }
 
 interface Room {
@@ -96,9 +97,10 @@ io.on("connection", (socket: Socket) => {
       chips: p.chips ?? 1000,
       settedChips: 0,
       checked: false,
+      allIn: false,
      }));
     room.locked = true;
-    room.members.forEach((p) => (p.settedChips = 0, p.checked = false));
+    room.members.forEach((p) => (p.settedChips = 0, p.checked = false, p.allIn = false));
     room.turnOrder = room.members.map((p) => p.name);
 
     io.to(sessionId).emit("update_members", room.members);
@@ -145,18 +147,7 @@ io.on("connection", (socket: Socket) => {
     const room = rooms[sessionId];
     if (!room) return;
 
-    room.turnOrder.splice(room.currentTurnIndex, 1);
-
-    // Check if only one player remains
-    if (room.turnOrder.length === 1) {  
-      WinnerOfTheRound(room, sessionId);
-    }
-
-    
-
-    if (room.currentTurnIndex >= room.turnOrder.length) {
-      room.currentTurnIndex = 0; // Wrap to first player
-    }
+    QuitTurnOrder(room, sessionId);
     io.to(sessionId).emit("update_members", room.members);
     NextTurn(room, sessionId, 0);
   })
@@ -199,8 +190,17 @@ io.on("connection", (socket: Socket) => {
 
   function ChipsTransfer(room: Room, sessionId: string, player: Player, amount: number): void {
     console.log(`💰 Spieler ${player.name} setzt ${amount} Chips in Session:`, sessionId);
-    player.chips -= amount;
-    player.settedChips += amount;
+    if (amount < player.chips) {
+        player.chips -= amount;
+        player.settedChips += amount;
+    }
+    else {
+        // Player goes all-in
+        player.settedChips += player.chips;
+        player.chips = 0;
+        GoAllin(room, sessionId, player);
+    }
+    
     io.to(sessionId).emit("update_members", room.members);
   }
 
@@ -219,9 +219,52 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("update_members", room.members);
   }
 
+  function QuitTurnOrder(room: Room, sessionId: string): void {
+    room.turnOrder.splice(room.currentTurnIndex, 1);
+
+    // Check if only one player remains
+    if (room.turnOrder.length === 1) {
+        // Check if the remaining player has checked
+        if (room.members.find(m => m.name === room.turnOrder[0])?.checked) {  
+            WinnerOfTheRound(room, sessionId);
+        }
+        else {
+            const hasAllInPlayer = room.members.some((p) => p.allIn);
+            if (!hasAllInPlayer) {
+                WinnerOfTheRound(room, sessionId);
+            }
+            
+        }
+
+    }
+    if (room.turnOrder.length === 0) {
+        WinnerOfTheRound(room, sessionId);
+    }
+
+    if (room.currentTurnIndex >= room.turnOrder.length) {
+      room.currentTurnIndex = 0; // Wrap to first player
+    }
+  }
+
+  function GoAllin(room: Room, sessionId: string, player: Player): void {
+    console.log(`💥 Spieler ${player.name} geht All-In in Session:`, sessionId);
+    player.allIn = true;
+    QuitTurnOrder(room, sessionId);
+    io.to(sessionId).emit("update_members", room.members);
+  }
+
   function WinnerOfTheRound(room: Room, sessionId: string): void {
     let winnerName: string;
     
+    // Add all-in players back to turnOrder
+    const allInPlayers = room.members.filter((p) => p.allIn);
+    allInPlayers.forEach((p) => {
+      if (!room.turnOrder.includes(p.name)) {
+        room.turnOrder.push(p.name);
+        console.log(`➕ All-in player ${p.name} added back to turnOrder`);
+      }
+    });
+
     if (room.turnOrder.length === 1) {
       //Der einzige verbleibende Spieler gewinnt
       winnerName = room.turnOrder[0]!;
@@ -243,8 +286,11 @@ io.on("connection", (socket: Socket) => {
       console.log(`🎉 ${winnerName} erhält ${totalPot} Chips`);
     }
     
-    // Reset all setchips to 0
-    room.members.forEach((p) => p.settedChips = 0);
+    // Reset all setchips and allIn status
+    room.members.forEach((p) => {
+      p.settedChips = 0;
+      p.allIn = false;
+    });
     
     // Reset turn order for next round
     room.turnOrder = room.members.map((p) => p.name);
@@ -271,7 +317,10 @@ io.on("connection", (socket: Socket) => {
       NextTurn(room, sessionId, 1);
 
       const player2 = room.members.find(m => m.name === room.turnOrder[room.currentTurnIndex]);
-      if (player2) ChipsTransfer(room, sessionId, player2, 20);
+      if (player2) {
+        ChipsTransfer(room, sessionId, player2, 20);
+        CheckThePlayers(room, sessionId, player2);
+      }
       NextTurn(room, sessionId, 1);
 
       break;

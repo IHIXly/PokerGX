@@ -17,7 +17,7 @@ export default function PokerGamePage() {
   );
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState("");
-  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean }>>([]);
+  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean; allIn: boolean }>>([]);
   const [raiseAmount, setRaiseAmount] = useState(0);
 
   const socketRef = useRef<Socket | null>(null);
@@ -134,6 +134,7 @@ export default function PokerGamePage() {
           const chips = member?.chips ?? u.chips;
           const settedChips = member?.settedChips ?? 0;
           const checked = member?.checked ?? false;
+          const allIn = member?.allIn ?? false;
           
           return (
             <li
@@ -148,8 +149,9 @@ export default function PokerGamePage() {
             >
               <span className="font-medium">
                 {playerName}
-                {!isActive && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
+                {!isActive && !allIn && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
                 {checked && isActive && <span className="ml-2 text-green-400 text-sm">(Gecheckt)</span>}
+                {allIn && <span className="ml-2 text-yellow-400 text-sm">(All-In)</span>}
               </span>
               <span className="text-sm text-indigo-400">{chips} Chips</span>
               <span className="text-sm text-indigo-400">{settedChips} Gesetzt</span>
