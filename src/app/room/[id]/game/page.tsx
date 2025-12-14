@@ -16,6 +16,7 @@ export default function PokerGamePage() {
     { enabled: !!sessionId }
   );
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
+  const [phase, setPhase] = useState(0);
   const [currentPlayer, setCurrentPlayer] = useState("");
   const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean; allIn: boolean }>>([]);
   const [raiseAmount, setRaiseAmount] = useState(0);
@@ -50,10 +51,16 @@ export default function PokerGamePage() {
       setMembers(members);
     });
 
-    socket.on("update_turn", ({ turnOrder, currentPlayer }) => {
-      console.log("🎲 Turn update:", { turnOrder, currentPlayer });
+    socket.on("update_turn", ({ turnOrder, currentPlayer, phase }) => {
+      console.log("🎲 Turn update:", { turnOrder, currentPlayer, phase });
       setTurnOrder(turnOrder);
       setCurrentPlayer(currentPlayer);
+      setPhase(phase);
+    });
+
+    socket.on("round_ends", (winnerName: string) => {
+      console.log("🏆 Runde endet. Gewinner:", winnerName);
+      // Hier könnten Sie eine Benachrichtigung anzeigen oder andere UI-Aktualisierungen vornehmen
     });
     
 
@@ -135,6 +142,7 @@ export default function PokerGamePage() {
           const settedChips = member?.settedChips ?? 0;
           const checked = member?.checked ?? false;
           const allIn = member?.allIn ?? false;
+          const hasChipps = chips > 0;
           
           return (
             <li
@@ -149,7 +157,7 @@ export default function PokerGamePage() {
             >
               <span className="font-medium">
                 {playerName}
-                {!isActive && !allIn && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
+                {!isActive && !allIn && hasChipps && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
                 {checked && isActive && <span className="ml-2 text-green-400 text-sm">(Gecheckt)</span>}
                 {allIn && <span className="ml-2 text-yellow-400 text-sm">(All-In)</span>}
               </span>
@@ -162,7 +170,7 @@ export default function PokerGamePage() {
 
       <div className="mb-4">
         <p className="text-lg">
-          Am Zug: <b className="text-green-400">{currentPlayer || "Warten..."}</b>
+          Phase: <b className="text-green-400">{phase || "Warten..."}</b>
         </p>
       </div>
 

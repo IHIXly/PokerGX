@@ -37,6 +37,7 @@ interface Room {
   phase: number;
   turnOrder: string[];
   currentTurnIndex: number;
+  blindsIndex: number;
 }
 
 interface StartSessionData {
@@ -70,6 +71,7 @@ io.on("connection", (socket: Socket) => {
       socket.emit("update_turn", {
         turnOrder: room.turnOrder,
         currentPlayer: room.turnOrder[room.currentTurnIndex],
+        phase: room.phase,
       });
       socket.emit("update_members", room.members);
     }
@@ -88,6 +90,7 @@ io.on("connection", (socket: Socket) => {
         phase: 0,
         turnOrder: [],
         currentTurnIndex: 0,
+        blindsIndex: 0,
       };
     }
 
@@ -100,15 +103,9 @@ io.on("connection", (socket: Socket) => {
       allIn: false,
      }));
     room.locked = true;
-    room.members.forEach((p) => (p.settedChips = 0, p.checked = false, p.allIn = false));
-    room.turnOrder = room.members.map((p) => p.name);
-
-    io.to(sessionId).emit("update_members", room.members);
-    io.to(sessionId).emit("session_started");
-    io.to(sessionId).emit("update_turn", {
-      turnOrder: room.turnOrder,
-      currentPlayer: room.turnOrder[room.currentTurnIndex],
-    });
+    
+   
+    
     StartNewRound(room, sessionId);
   });
 
@@ -185,6 +182,7 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("update_turn", {
       turnOrder: room.turnOrder,
       currentPlayer: room.turnOrder[room.currentTurnIndex],
+      phase: room.phase,
     });
   }
 
@@ -211,6 +209,29 @@ io.on("connection", (socket: Socket) => {
 
   function StartNewRound(room: Room, sessionId: string): void {
     room.phase = 0;
+
+    // Reset all setchips and allIn status
+    room.members.forEach((p) => {
+      p.settedChips = 0;
+      p.checked = false;
+      p.allIn = false;
+    });
+    
+    // Reset turn order for next round - only players with chips > 0
+    room.turnOrder = room.members.filter((p) => p.chips > 0).map((p) => p.name);
+
+    // Set currentTurnIndex AFTER turnOrder is set
+    room.currentTurnIndex = (room.blindsIndex) % room.turnOrder.length;
+    room.blindsIndex += 1;
+
+    io.to(sessionId).emit("update_members", room.members);
+    io.to(sessionId).emit("session_started");
+    io.to(sessionId).emit("update_turn", {
+      turnOrder: room.turnOrder,
+      currentPlayer: room.turnOrder[room.currentTurnIndex],
+      phase: room.phase,
+    });
+
     NextPhase(room, sessionId);
   }
 
@@ -286,18 +307,9 @@ io.on("connection", (socket: Socket) => {
       console.log(`🎉 ${winnerName} erhält ${totalPot} Chips`);
     }
     
-    // Reset all setchips and allIn status
-    room.members.forEach((p) => {
-      p.settedChips = 0;
-      p.allIn = false;
-    });
-    
-    // Reset turn order for next round
-    room.turnOrder = room.members.map((p) => p.name);
-    
-    // Emit update to all clients
-    io.to(sessionId).emit("update_members", room.members);
+    io.to(sessionId).emit("round_ends", winnerName);
 
+    //Sobald ein Button implementiert ist, um die nächste Runde zu starten, kann dieser Aufruf entfernt werden
     StartNewRound(room, sessionId);
   }
 
