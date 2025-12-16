@@ -239,4 +239,54 @@ export const pokerRouter = createTRPCRouter({
         },
       });
     }),
+
+  isUserDeveloper: protectedProcedure
+  .query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const user = await ctx.db.user.findUnique({
+      where: { id: userId },
+      select: { developer: true },
+    });
+
+    return user?.developer ?? false;
+  }),
+
+
+  // ✅ Session löschen (Developer only)
+  developerClearSession: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const isDev = await ctx.db.user.findUnique({
+        where: { id: userId },
+        select: { developer: true },
+      });
+
+      if (!isDev?.developer) {
+        throw new Error("Nur Entwickler dürfen diese Aktion ausführen.");
+      }
+
+      await ctx.db.pokerSessionUser.deleteMany({
+        where: { pokerSessionId: input.sessionId },
+      });
+
+      return await ctx.db.pokerSession.delete({
+        where: { id: input.sessionId },
+      });
+    }),
+  
+    // ✅ Inaktive Sessions beenden (72h Inaktivität)
+  terminateSessionForInactivity: protectedProcedure
+    .mutation(async ({ ctx, input }) => {
+      const cutoff = new Date(Date.now() - (1000 * 60 * 60 * 24) * 3); // 72h
+
+      await ctx.db.pokerSession.deleteMany({
+        where: {
+          updatedAt: { lt: cutoff },
+        },
+      });
+    }),
+
 });

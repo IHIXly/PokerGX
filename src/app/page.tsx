@@ -33,6 +33,10 @@ export default function HomePage() {
     onSuccess: () => utils.poker.getSessions.invalidate(),
   });
 
+  const developerClearSession = api.poker.developerClearSession.useMutation({
+    onSuccess: () => utils.poker.getSessions.invalidate(),
+  });
+
   const { data: sessions, isLoading } = api.poker.getSessions.useQuery(undefined, {
     enabled: !!session,
   });
@@ -89,6 +93,10 @@ export default function HomePage() {
           <ul className="space-y-4">
             {sessions.map((s) => {
               const isHost = s.users[0]?.user.id === session.user.id;
+              //const isDeveloper = s.users.some(
+              //  (psu) => psu.user.id === session.user.id && psu.user.developer
+              //);
+              const isDeveloper = session?.user.developer === true;;
 
               return (
                 <motion.li
@@ -113,10 +121,19 @@ export default function HomePage() {
                   </div>
 
                   <div className="flex items-center gap-4">
+                    {isDeveloper &&(
+                      <button
+                        onClick={() => developerClearSession.mutate({ sessionId: s.id })}
+                        className="text-indigo-400 hover:underline"
+                      >
+                        Clear (developer only)
+                      </button>
+                    )}
+
                     {s.status !== "beendet" && (
                       <button
-                        className="text-indigo-400 hover:underline"
                         onClick={() => joinSession.mutate({ sessionId: s.id })}
+                        className="text-indigo-400 hover:underline"
                       >
                         Beitreten
                       </button>
