@@ -20,6 +20,7 @@ export default function PokerGamePage() {
   const [currentPlayer, setCurrentPlayer] = useState("");
   const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean; allIn: boolean, cards: number[][] }>>([]);
   const [raiseAmount, setRaiseAmount] = useState(0);
+  const [tableCards, setTableCards] = useState<number[][]>([]);
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -52,11 +53,12 @@ export default function PokerGamePage() {
       setMembers(members);
     });
 
-    socket.on("update_turn", ({ turnOrder, currentPlayer, phase }) => {
-      console.log("🎲 Turn update:", { turnOrder, currentPlayer, phase });
+    socket.on("update_turn", ({ turnOrder, currentPlayer, phase, tableCards }) => {
+      console.log("🎲 Turn update:", { turnOrder, currentPlayer, phase, tableCards });
       setTurnOrder(turnOrder);
       setCurrentPlayer(currentPlayer);
       setPhase(phase);
+      setTableCards(tableCards);
     });
 
     socket.on("round_ends", (winnerName: string) => {
@@ -144,6 +146,7 @@ export default function PokerGamePage() {
           const Playercards = member?.cards ?? [];
           const card1 = Playercards[0] ?? [];
           const card2 = Playercards[1] ?? [];
+          const isOwner = playerName === userName;
           const checked = member?.checked ?? false;
           const allIn = member?.allIn ?? false;
           const hasChipps = chips > 0;
@@ -160,7 +163,12 @@ export default function PokerGamePage() {
               }`}
             >
               <span className="font-medium">
-                {playerName} , {card1[0]}-{card1[1]} , {card2[0]}-{card2[1]}
+                {playerName}
+                {" "}- {" "}
+                {isOwner ? 
+                  ( <> {card1[0]}-{card1[1]} , {card2[0]}-{card2[1]} </> ) :  
+                  ( <> ? , ? </> )
+                }
                 {!isActive && !allIn && hasChipps && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
                 {checked && isActive && <span className="ml-2 text-green-400 text-sm">(Gecheckt)</span>}
                 {allIn && <span className="ml-2 text-yellow-400 text-sm">(All-In)</span>}
@@ -175,6 +183,10 @@ export default function PokerGamePage() {
       <div className="mb-4">
         <p className="text-lg">
           Phase: <b className="text-green-400">{phase || "Warten..."}</b>
+        </p>
+
+        <p className="text-lg">
+          Tischkarten: <b className="text-green-400">{tableCards.map(card => `${card[0]}-${card[1]}`).join(", ") || ""}</b>
         </p>
       </div>
 

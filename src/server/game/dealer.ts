@@ -5,6 +5,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import  { Deck } from "./cards";
+import { table } from "console";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +42,7 @@ interface Room {
   currentTurnIndex: number;
   blindsIndex: number;
   deck: Deck;
+  cards: number[][];
 }
 
 interface StartSessionData {
@@ -75,6 +77,7 @@ io.on("connection", (socket: Socket) => {
         turnOrder: room.turnOrder,
         currentPlayer: room.turnOrder[room.currentTurnIndex],
         phase: room.phase,
+        tableCards: room.cards
       });
       socket.emit("update_members", room.members);
     }
@@ -95,6 +98,7 @@ io.on("connection", (socket: Socket) => {
         currentTurnIndex: 0,
         blindsIndex: 0,
         deck: new Deck(),
+        cards: []
       };
     }
 
@@ -188,6 +192,7 @@ io.on("connection", (socket: Socket) => {
       turnOrder: room.turnOrder,
       currentPlayer: room.turnOrder[room.currentTurnIndex],
       phase: room.phase,
+      tableCards: room.cards
     });
   }
 
@@ -227,8 +232,12 @@ io.on("connection", (socket: Socket) => {
     // Reset turn order for next round - only players with chips > 0
     room.turnOrder = room.members.filter((p) => p.chips > 0).map((p) => p.name);
 
+    room.cards = [];
+
     // Reset and shuffle the deck
     room.deck.reset();
+
+
 
     // Deal two cards to each player
     room.members.forEach((p) => {
@@ -248,6 +257,7 @@ io.on("connection", (socket: Socket) => {
       turnOrder: room.turnOrder,
       currentPlayer: room.turnOrder[room.currentTurnIndex],
       phase: room.phase,
+      tableCards: room.cards
     });
 
     NextPhase(room, sessionId);
@@ -356,22 +366,35 @@ io.on("connection", (socket: Socket) => {
       break;
 
     case 2:
-      // Drei Karten für alle Spieler werden gezeigt
+      // Pick three community cards (the flop)
+      const TableCard1 = room.deck.drawOneCard();
+      const TableCard2 = room.deck.drawOneCard();
+      const TableCard3 = room.deck.drawOneCard();
+      room.cards[0] = TableCard1 ?? [];
+      room.cards[1] = TableCard2 ?? [];
+      room.cards[2] = TableCard3 ?? [];
+      
       console.log("🌟 Flop Phase gestartet");
       break;
 
     case 3:
-      // Die vierte Karte wird gezeigt
+      // Pick the fourth community card (the turn)
+      const TableCard4 = room.deck.drawOneCard();
+      room.cards[3] = TableCard4 ?? [];
+
       console.log("🌟 Turn Phase gestartet");
       break;
 
     case 4:
-      // Die fünfte Karte wird gezeigt
+      // Pick the fifth community card (the river)
+      const TableCard5 = room.deck.drawOneCard();
+      room.cards[4] = TableCard5 ?? [];
+
       console.log("🌟 River Phase gestartet");
       break;
 
     case 5:
-      // Gewinner wird ausgewertet
+      // Showdown - determine winner
       console.log("🌟 Gewinner wird ausgewertet");
       if (sessionId) {
         WinnerOfTheRound(room, sessionId);
