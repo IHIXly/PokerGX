@@ -4,6 +4,7 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import  { Deck } from "./cards";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +30,7 @@ interface Player {
   settedChips: number;
   checked: boolean;
   allIn: boolean;
+  cards: number[][];
 }
 
 interface Room {
@@ -38,6 +40,7 @@ interface Room {
   turnOrder: string[];
   currentTurnIndex: number;
   blindsIndex: number;
+  deck: Deck;
 }
 
 interface StartSessionData {
@@ -91,6 +94,7 @@ io.on("connection", (socket: Socket) => {
         turnOrder: [],
         currentTurnIndex: 0,
         blindsIndex: 0,
+        deck: new Deck(),
       };
     }
 
@@ -101,6 +105,7 @@ io.on("connection", (socket: Socket) => {
       settedChips: 0,
       checked: false,
       allIn: false,
+      cards: []
      }));
     room.locked = true;
     
@@ -207,6 +212,7 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("update_members", room.members);
   }
 
+
   function StartNewRound(room: Room, sessionId: string): void {
     room.phase = 0;
 
@@ -216,9 +222,21 @@ io.on("connection", (socket: Socket) => {
       p.checked = false;
       p.allIn = false;
     });
+
     
     // Reset turn order for next round - only players with chips > 0
     room.turnOrder = room.members.filter((p) => p.chips > 0).map((p) => p.name);
+
+    // Reset and shuffle the deck
+    room.deck.reset();
+
+    // Deal two cards to each player
+    room.members.forEach((p) => {
+      if(room.turnOrder.includes(p.name)) {
+        const playerCards = room.deck.drawTwoCards();
+        p.cards = playerCards ? playerCards : [];
+      }
+    });
 
     // Set currentTurnIndex AFTER turnOrder is set
     room.currentTurnIndex = (room.blindsIndex) % room.turnOrder.length;

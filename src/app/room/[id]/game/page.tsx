@@ -18,12 +18,13 @@ export default function PokerGamePage() {
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
   const [phase, setPhase] = useState(0);
   const [currentPlayer, setCurrentPlayer] = useState("");
-  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean; allIn: boolean }>>([]);
+  const [members, setMembers] = useState<Array<{ name: string; chips: number; settedChips: number; checked: boolean; allIn: boolean, cards: number[][] }>>([]);
   const [raiseAmount, setRaiseAmount] = useState(0);
 
   const socketRef = useRef<Socket | null>(null);
 
   const userName = authSession?.user?.name ?? "Unbekannt";
+  
 
   useEffect(() => {
     const socket = io("http://localhost:3001", {
@@ -140,6 +141,9 @@ export default function PokerGamePage() {
           const member = members.find((m) => m.name === playerName);
           const chips = member?.chips ?? u.chips;
           const settedChips = member?.settedChips ?? 0;
+          const Playercards = member?.cards ?? [];
+          const card1 = Playercards[0] ?? [];
+          const card2 = Playercards[1] ?? [];
           const checked = member?.checked ?? false;
           const allIn = member?.allIn ?? false;
           const hasChipps = chips > 0;
@@ -156,7 +160,7 @@ export default function PokerGamePage() {
               }`}
             >
               <span className="font-medium">
-                {playerName}
+                {playerName} , {card1[0]}-{card1[1]} , {card2[0]}-{card2[1]}
                 {!isActive && !allIn && hasChipps && <span className="ml-2 text-red-400 text-sm">(Gefoldet)</span>}
                 {checked && isActive && <span className="ml-2 text-green-400 text-sm">(Gecheckt)</span>}
                 {allIn && <span className="ml-2 text-yellow-400 text-sm">(All-In)</span>}
