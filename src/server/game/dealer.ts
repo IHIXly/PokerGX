@@ -98,7 +98,7 @@ io.on("connection", (socket: Socket) => {
         currentTurnIndex: 0,
         blindsIndex: 0,
         deck: new Deck(),
-        cards: []
+        cards: [],
       };
     }
 
@@ -109,7 +109,7 @@ io.on("connection", (socket: Socket) => {
       settedChips: 0,
       checked: false,
       allIn: false,
-      cards: []
+      cards: [],
      }));
     room.locked = true;
     
@@ -172,6 +172,25 @@ io.on("connection", (socket: Socket) => {
     }
     });
 
+  socket.on("continue", (sessionId : string) => {
+    console.log("🔄 Spieler möchte weiterspielen in Session:", sessionId);
+    const room = rooms[sessionId];
+    if (!room) return;
+    StartNewRound(room, sessionId);
+  });
+
+  socket.on("finish", (sessionId : string) => {
+    console.log("🏁 Spieler möchte Spiel beenden in Session:", sessionId);
+    const room = rooms[sessionId];
+    if (!room) return;
+    CloseTheGame(room, sessionId);
+  });
+
+  function CloseTheGame(room: Room, sessionId: string): void {
+    console.log("🏆 Spiel endet in Session:", sessionId);
+    room.locked = false;
+    io.to(sessionId).emit("game_finished");
+  }
 
   function NextTurn(room: Room, sessionId: string, turnSteps: number): void {
     console.log("➡️ Nächster Spieler ist dran in Session:", sessionId);
@@ -253,6 +272,7 @@ io.on("connection", (socket: Socket) => {
 
     io.to(sessionId).emit("update_members", room.members);
     io.to(sessionId).emit("session_started");
+    io.to(sessionId).emit("round_continues");
     io.to(sessionId).emit("update_turn", {
       turnOrder: room.turnOrder,
       currentPlayer: room.turnOrder[room.currentTurnIndex],
@@ -335,10 +355,12 @@ io.on("connection", (socket: Socket) => {
       console.log(`🎉 ${winnerName} erhält ${totalPot} Chips`);
     }
     
-    io.to(sessionId).emit("round_ends", winnerName);
-
-    //Sobald ein Button implementiert ist, um die nächste Runde zu starten, kann dieser Aufruf entfernt werden
-    StartNewRound(room, sessionId);
+    
+    io.to(sessionId).emit("update_members", room.members);
+    io.to(sessionId).emit("round_ends", { 
+      winnerName, 
+      totalPot 
+    });
   }
 
   function NextPhase(room: Room, sessionId: string): void {
