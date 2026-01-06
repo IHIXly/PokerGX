@@ -18,6 +18,8 @@ export default function HomePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [sessionCode, setSessionCode] = useState(false);
 
+  const updateUpdateAt = api.poker.updateUpdateAt.useMutation();
+
   const joinSession = api.poker.joinSession.useMutation({
     onSuccess: (data) => {
       utils.poker.getSessions.invalidate();
@@ -132,7 +134,10 @@ export default function HomePage() {
 
                     {s.status !== "beendet" && (
                       <button
-                        onClick={() => joinSession.mutate({ sessionId: s.id })}
+                        onClick={() => {
+                          joinSession.mutate({ sessionId: s.id });
+                          updateUpdateAt.mutate({ sessionId: s.id });
+                        }}
                         className="text-indigo-400 hover:underline"
                       >
                         Beitreten

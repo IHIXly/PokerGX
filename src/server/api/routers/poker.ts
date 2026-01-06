@@ -1,6 +1,7 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { Session } from "inspector/promises";
 import { z } from "zod";
+import { cronProcedure } from "../trpc";
 
 export const pokerRouter = createTRPCRouter({
   // ✅ Neue Session erstellen
@@ -97,6 +98,16 @@ export const pokerRouter = createTRPCRouter({
 
       return await ctx.db.pokerSession.delete({
         where: { id: input.sessionId },
+      });
+    }),
+
+  // ✅ Session updatedAt aktualisieren
+  updateUpdateAt: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return await ctx.db.pokerSession.update({
+        where: { id: input.sessionId },
+        data: { updatedAt: new Date() },
       });
     }),
 
@@ -278,15 +289,24 @@ export const pokerRouter = createTRPCRouter({
     }),
   
     // ✅ Inaktive Sessions beenden (72h Inaktivität)
-  terminateSessionForInactivity: protectedProcedure
+  terminateSessionForInactivity: cronProcedure
     .mutation(async ({ ctx, input }) => {
-      const cutoff = new Date(Date.now() - (1000 * 60 * 60 * 24) * 3); // 72h
+      const cutoff = new Date(Date.now() - (1000 * 60 * 60 * 24) * 5); // 5 Tage
+      //const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 0.1); // 0.1h // Testzwecke
+      const sessions = await ctx.db.pokerSession.findMany({
+        where: { updatedAt: { lt: cutoff } },
+        select: { id: true },
+      })
+
+      const ids = sessions.map(s => s.id)
+
+      await ctx.db.pokerSessionUser.deleteMany({
+        where: { pokerSessionId: { in: ids } },
+      })
 
       await ctx.db.pokerSession.deleteMany({
-        where: {
-          updatedAt: { lt: cutoff },
-        },
-      });
+        where: { id: { in: ids } },
+      })
     }),
 
 });

@@ -1,5 +1,4 @@
-// Not in use. Delete later if unnecessary.
-
+//cronjobs route.ts HTTP endpoint to be called by cronjob service as a clock trigger
 export const runtime = "nodejs";
 
 import { appRouter } from "@/server/api/root";
@@ -14,8 +13,7 @@ export async function POST(req: Request) {
   const ctx = await createTRPCContext({ headers: req.headers });
   const caller = appRouter.createCaller(ctx);
 
-  await caller.poker.terminateSessionForInactivity(); 
-  // ^ Name ggf. an deinen Router/Procedure anpassen!
+  await caller.poker.terminateSessionForInactivity();
 
   return new Response("OK");
 }
