@@ -1,6 +1,6 @@
 "use client"
 
-import ThreeScene from "@/app/components/ThreeScene"
+import ThreePokerchipScene from "@/app/components/ThreePokerChip"
 import { signIn } from "next-auth/react"
 
 export default function LoginPage() {
@@ -8,7 +8,7 @@ export default function LoginPage() {
     <main className="relative min-h-screen overflow-hidden bg-gray-900 text-white">
       {/* Background */}
       <div className="absolute inset-0">
-        <ThreeScene />
+        <ThreePokerchipScene />
       </div>
 
       {/* Dark overlay for readability */}
