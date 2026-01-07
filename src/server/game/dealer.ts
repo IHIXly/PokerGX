@@ -4,7 +4,7 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import  { Deck } from "./cards";
+import  { Deck, evaluateHighestCard } from "./cards";
 import { table } from "console";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,6 +32,7 @@ interface Player {
   checked: boolean;
   allIn: boolean;
   cards: number[][];
+  score: number;
 }
 
 interface Room {
@@ -98,7 +99,7 @@ io.on("connection", (socket: Socket) => {
         currentTurnIndex: 0,
         blindsIndex: 0,
         deck: new Deck(),
-        cards: [],
+        cards: []
       };
     }
 
@@ -110,6 +111,7 @@ io.on("connection", (socket: Socket) => {
       checked: false,
       allIn: false,
       cards: [],
+      score: 0
      }));
     room.locked = true;
     
@@ -245,6 +247,7 @@ io.on("connection", (socket: Socket) => {
       p.settedChips = 0;
       p.checked = false;
       p.allIn = false;
+      p.score = 0;
     });
 
     
@@ -340,8 +343,20 @@ io.on("connection", (socket: Socket) => {
       console.log("🏆 Spieler gewinnt:", winnerName);
     }
     else {
-      //Gewinner wird ausgewertet
-      winnerName = room.turnOrder[0]!; // Placeholder - implement your winner logic here
+      let highestScore = -1;
+      winnerName = "Tim";
+      room.turnOrder.forEach((playerName) => {
+        const player = room.members.find((p) => p.name === playerName);
+        if (player) {
+          let scorepoint = evaluateHighestCard(room.cards, player.cards);
+          player.score = scorepoint.score;
+          if (scorepoint.score > highestScore) {
+            highestScore = scorepoint.score;
+            winnerName = player.name;
+          }
+        }
+        });
+      
     }
     
     // Calculate total pot
