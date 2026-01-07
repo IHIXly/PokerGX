@@ -19,10 +19,15 @@ declare module "next-auth" {
 		user: {
 			id: string;
 			chips:number;
+      developer: boolean;
 			// ...other properties
 			// role: UserRole;
 		} & DefaultSession["user"];
 	}
+  interface User {
+    developer: boolean;
+    chips: number;
+}
 
 }
 
@@ -54,6 +59,7 @@ export const authConfig = {
           email: user.email,
           chips: user.chips,
           image: user.image,
+          developer: user.developer ?? false,
         };
       },
     }),
@@ -72,6 +78,7 @@ export const authConfig = {
         token.id = user.id;
         token.chips = user.chips ?? 1000;
         token.image = user.image || "/Guest.png";
+        token.developer = user.developer ?? false;
       }
       return token;
     },
@@ -82,6 +89,7 @@ export const authConfig = {
         session.user.id = token.id as string;
         session.user.chips = token.chips as number;
         session.user.image = token.image as string;
+        session.user.developer = token.developer as boolean;
       }
       return session;
     },

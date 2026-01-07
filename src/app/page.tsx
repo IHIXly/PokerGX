@@ -19,6 +19,8 @@ export default function HomePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [sessionCode, setSessionCode] = useState(false);
 
+  const updateUpdateAt = api.poker.updateUpdateAt.useMutation();
+
   const joinSession = api.poker.joinSession.useMutation({
     onSuccess: (data) => {
       utils.poker.getSessions.invalidate();
@@ -31,6 +33,10 @@ export default function HomePage() {
   });
 
   const clearSession = api.poker.clearSession.useMutation({
+    onSuccess: () => utils.poker.getSessions.invalidate(),
+  });
+
+  const developerClearSession = api.poker.developerClearSession.useMutation({
     onSuccess: () => utils.poker.getSessions.invalidate(),
   });
 
@@ -90,6 +96,10 @@ export default function HomePage() {
           <ul className="space-y-4">
             {sessions.map((s) => {
               const isHost = s.users[0]?.user.id === session.user.id;
+              //const isDeveloper = s.users.some(
+              //  (psu) => psu.user.id === session.user.id && psu.user.developer
+              //);
+              const isDeveloper = session?.user.developer === true;;
 
               return (
                 <motion.li
@@ -114,10 +124,22 @@ export default function HomePage() {
                   </div>
 
                   <div className="flex items-center gap-4">
+                    {isDeveloper &&(
+                      <button
+                        onClick={() => developerClearSession.mutate({ sessionId: s.id })}
+                        className="text-indigo-400 hover:underline"
+                      >
+                        Clear (developer only)
+                      </button>
+                    )}
+
                     {s.status !== "beendet" && (
                       <button
+                        onClick={() => {
+                          joinSession.mutate({ sessionId: s.id });
+                          updateUpdateAt.mutate({ sessionId: s.id });
+                        }}
                         className="text-indigo-400 hover:underline"
-                        onClick={() => joinSession.mutate({ sessionId: s.id })}
                       >
                         Beitreten
                       </button>

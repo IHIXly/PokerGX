@@ -44,6 +44,7 @@ model User {
   accounts      Account[]
   pokerSessions PokerSessionUser[]
   sessions      Session[]
+  developer     Boolean            @default(false)
 }
 
 model PokerSession {
@@ -51,11 +52,12 @@ model PokerSession {
   name        String
   private     Boolean            @default(false)
   status      String
-  createdAt   DateTime           @default(now())
   createdBy   String
   gameState   Json?
   sessionCode Int                @unique
   users       PokerSessionUser[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 }
 
 model PokerSessionUser {
