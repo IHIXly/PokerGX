@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import SessionSettings from "./components/SessionSettings";
 import SessionCode from "./components/SessionCode";
+import ThreeScene from "./components/ThreeScene"
 
 export default function HomePage() {
   const { data: session, status } = useSession();
