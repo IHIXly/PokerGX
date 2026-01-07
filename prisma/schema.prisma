@@ -54,7 +54,7 @@ model PokerSession {
   createdAt   DateTime           @default(now())
   createdBy   String
   gameState   Json?
-  sessionCode Int                @default(0)
+  sessionCode Int                @unique
   users       PokerSessionUser[]
 }
 
