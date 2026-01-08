@@ -131,3 +131,20 @@ export const protectedProcedure = t.procedure
 			},
 		});
 	});
+
+/**
+ * Cron (server-to-server) procedure
+ *
+ * Für Aufrufe über Cronjobs/Webhooks ohne User-Session.
+ * Autorisiert über x-cron-secret Header.
+ */
+export const cronProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(({ ctx, next }) => {
+    const secret = ctx.headers.get("x-cron-secret");
+    if (!secret || secret !== process.env.CRON_SECRET) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+    return next();
+  });
+

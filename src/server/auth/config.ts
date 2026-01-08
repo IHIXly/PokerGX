@@ -19,10 +19,15 @@ declare module "next-auth" {
 		user: {
 			id: string;
 			chips:number;
+      developer: boolean;
 			// ...other properties
 			// role: UserRole;
 		} & DefaultSession["user"];
 	}
+  interface User {
+    developer: boolean;
+    chips: number;
+}
 
 }
 
@@ -36,24 +41,27 @@ export const authConfig = {
     DiscordProvider,
     GitHubProvider,
     CredentialsProvider({
-  name: "Guest Login",
-  credentials: {},
-  async authorize() {
-    const user = await db.user.create({
-      data: {
-        name: `Guest_${Math.floor(Math.random() * 10000)}`,
-        email: `guest_${crypto.randomUUID()}@poker.local`,
-        chips: 1000,
-        image: "./Guest.png"
+      name: "Guest Login",
+      credentials: {},
+      async authorize() {
+        const user = await db.user.create({
+          data: {
+            name: `Guest_${Math.floor(Math.random() * 10000)}`,
+            email: `guest_${randomUUID()}@poker.local`,
+            chips: 1000,
+            image: "/Guest.png",
+          },
+        });
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          chips: user.chips,
+          image: user.image,
+          developer: user.developer ?? false,
+        };
       },
-    });
-     return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      chips: user.chips,
-    };
-  },
     }),
   ],
   adapter: PrismaAdapter(db),
@@ -69,6 +77,8 @@ export const authConfig = {
       if (user) {
         token.id = user.id;
         token.chips = user.chips ?? 1000;
+        token.image = user.image || "/Guest.png";
+        token.developer = user.developer ?? false;
       }
       return token;
     },
@@ -78,6 +88,8 @@ export const authConfig = {
       if (token) {
         session.user.id = token.id as string;
         session.user.chips = token.chips as number;
+        session.user.image = token.image as string;
+        session.user.developer = token.developer as boolean;
       }
       return session;
     },
