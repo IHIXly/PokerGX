@@ -14,19 +14,16 @@
 		"db:studio": "prisma studio",
 		"dev": "concurrently -n NEXT,DEALER -c green,cyan \"npm:dev:next\" \"npm:dev:dealer\"",
 		"dev:next": "next dev --turbo",
-		"dev:dealer": "nodemon --watch src/server/game --ext js,mjs,ts --exec node src/server/game/dealer.js",
+		"dev:dealer": "tsx watch src/server/game/dealer.ts",
 		"postinstall": "prisma generate",
 		"preview": "next build && next start",
 		"start": "next start",
 		"typecheck": "tsc --noEmit",
-		"serve": "concurrently -n NEXT,DEALER -c green,cyan \"next start\" \"node src/server/game/dealer.js\""
+		"serve": "concurrently -n NEXT,DEALER -c green,cyan \"next start\" \"tsx src/server/game/dealer.ts\""
 	},
 	"dependencies": {
 		"@auth/prisma-adapter": "^2.7.2",
 		"@prisma/client": "^6.18.0",
-		"@react-three/drei": "^10.7.7",
-		"@react-three/fiber": "^9.4.2",
-		"@react-three/rapier": "^2.2.0",
 		"@t3-oss/env-nextjs": "^0.12.0",
 		"@tanstack/react-query": "^5.69.0",
 		"@trpc/client": "^11.0.0",
@@ -58,6 +55,7 @@
 		"postcss": "^8.5.3",
 		"prisma": "^6.18.0",
 		"tailwindcss": "^4.0.15",
+		"tsx": "^4.21.0",
 		"typescript": "^5.8.2"
 	},
 	"ct3aMetadata": {
