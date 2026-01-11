@@ -25,7 +25,7 @@ declare module "next-auth" {
 		} & DefaultSession["user"];
 	}
   interface User {
-    developer: boolean;
+    developer?: boolean;
     chips: number;
 }
 
@@ -36,6 +36,15 @@ declare module "next-auth" {
  *
  * @see https://next-auth.js.org/configuration/options
  */
+
+declare module "@auth/core/adapters" {
+  interface AdapterUser {
+    chips: number;
+    developer: boolean;
+  }
+}
+
+
 export const authConfig = {
   providers: [
     DiscordProvider,
