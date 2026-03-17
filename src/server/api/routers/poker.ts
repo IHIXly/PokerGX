@@ -1,5 +1,4 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { Session } from "inspector/promises";
 import { z } from "zod";
 import { cronProcedure } from "../trpc";
 
@@ -191,8 +190,6 @@ export const pokerRouter = createTRPCRouter({
   startSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
       return await ctx.db.pokerSession.update({
         where: { id: input.sessionId },
         data: { status: "gestartet" },
@@ -252,17 +249,16 @@ export const pokerRouter = createTRPCRouter({
     }),
 
   isUserDeveloper: protectedProcedure
-  .query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
+    .query(async ({ ctx }) => {
+      const userId = ctx.session.user.id;
 
-    const user = await ctx.db.user.findUnique({
-      where: { id: userId },
-      select: { developer: true },
-    });
+      const user = await ctx.db.user.findUnique({
+        where: { id: userId },
+        select: { developer: true },
+      });
 
-    return user?.developer ?? false;
-  }),
-
+      return user?.developer ?? false;
+    }),
 
   // ✅ Session löschen (Developer only)
   developerClearSession: protectedProcedure
@@ -287,26 +283,66 @@ export const pokerRouter = createTRPCRouter({
         where: { id: input.sessionId },
       });
     }),
-  
-    // ✅ Inaktive Sessions beenden (72h Inaktivität)
+
+  // ✅ Inaktive Sessions beenden (72h Inaktivität)
   terminateSessionForInactivity: cronProcedure
     .mutation(async ({ ctx, input }) => {
-      const cutoff = new Date(Date.now() - (1000 * 60 * 60 * 24) * 5); // 5 Tage
-      //const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 0.1); // 0.1h // Testzwecke
+      const cutoff = new Date(Date.now() - (1000 * 60 * 60 * 24) * 5);
       const sessions = await ctx.db.pokerSession.findMany({
         where: { updatedAt: { lt: cutoff } },
         select: { id: true },
-      })
+      });
 
-      const ids = sessions.map(s => s.id)
+      const ids = sessions.map(s => s.id);
 
       await ctx.db.pokerSessionUser.deleteMany({
         where: { pokerSessionId: { in: ids } },
-      })
+      });
 
       await ctx.db.pokerSession.deleteMany({
         where: { id: { in: ids } },
-      })
+      });
     }),
 
+  // ✅ Startchips für alle Spieler in einer Session setzen
+  updateSessionChips: protectedProcedure
+    .input(z.object({ sessionId: z.string(), chips: z.number().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const session = await ctx.db.pokerSession.findUnique({
+        where: { id: input.sessionId },
+      });
+
+      if (session?.createdBy !== userId) {
+        throw new Error("Nur der Host darf die Chips anpassen.");
+      }
+
+      await ctx.db.pokerSessionUser.updateMany({
+        where: { pokerSessionId: input.sessionId },
+        data: { chips: input.chips },
+      });
+    }),
+
+  // ✅ Spieler aus Session entfernen (Host only)
+  kickPlayer: protectedProcedure
+    .input(z.object({ sessionId: z.string(), userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const hostId = ctx.session.user.id;
+
+      const session = await ctx.db.pokerSession.findUnique({
+        where: { id: input.sessionId },
+      });
+
+      if (session?.createdBy !== hostId) {
+        throw new Error("Nur der Host darf Spieler entfernen.");
+      }
+
+      await ctx.db.pokerSessionUser.deleteMany({
+        where: {
+          pokerSessionId: input.sessionId,
+          userId: input.userId,
+        },
+      });
+    }),
 });
