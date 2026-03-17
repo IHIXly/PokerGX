@@ -4,8 +4,7 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import  { Deck, evaluateHighestCard } from "./cards";
-import { table } from "console";
+import { Deck, evaluateHighestCard } from "./cards";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +23,6 @@ const io = new Server(server, {
   transports: ["websocket", "polling"],
 });
 
-// Type definitions
 interface Player {
   name: string;
   chips: number;
@@ -44,6 +42,9 @@ interface Room {
   blindsIndex: number;
   deck: Deck;
   cards: number[][];
+  roundNumber: number;
+  smallBlind: string;
+  bigBlind: string;
 }
 
 interface StartSessionData {
@@ -62,33 +63,78 @@ interface FoldData {
   playerName: string;
 }
 
-// Räume
+interface ChatData {
+  sessionId: string;
+  playerName: string;
+  message: string;
+}
+
+interface ReadyData {
+  sessionId: string;
+  playerName: string;
+}
+
 const rooms: Record<string, Room> = {};
+const readyState: Record<string, string[]> = {};
 
 io.on("connection", (socket: Socket) => {
   console.log("🔌 Neuer Client:", socket.id);
 
-  // Client explicitly joins the session room
   socket.on("join_session", (sessionId: string) => {
     socket.join(sessionId);
     console.log("👋 Client ist Raum beigetreten:", sessionId, socket.id);
+    socket.to(sessionId).emit("player_joined");
     const room = rooms[sessionId];
     if (room && room.turnOrder && room.turnOrder.length > 0) {
       socket.emit("update_turn", {
         turnOrder: room.turnOrder,
         currentPlayer: room.turnOrder[room.currentTurnIndex],
         phase: room.phase,
-        tableCards: room.cards
+        tableCards: room.cards,
+        smallBlind: room.smallBlind,
+        bigBlind: room.bigBlind,
+        roundNumber: room.roundNumber,
       });
       socket.emit("update_members", room.members);
     }
+    if (readyState[sessionId]) {
+      socket.emit("update_ready", readyState[sessionId]);
+    }
+  });
+
+  socket.on("chat_message", ({ sessionId, playerName, message }: ChatData) => {
+    io.to(sessionId).emit("chat_message", {
+      playerName,
+      message,
+      timestamp: Date.now(),
+    });
+  });
+
+  socket.on("player_ready", ({ sessionId, playerName }: ReadyData) => {
+    if (!readyState[sessionId]) readyState[sessionId] = [];
+    const idx = readyState[sessionId].indexOf(playerName);
+    if (idx === -1) {
+      readyState[sessionId].push(playerName);
+    } else {
+      readyState[sessionId].splice(idx, 1);
+    }
+    io.to(sessionId).emit("update_ready", readyState[sessionId]);
+  });
+
+  socket.on("chips_updated", (sessionId: string) => {
+    io.to(sessionId).emit("chips_updated");
+  });
+
+  socket.on("kick_player", ({ sessionId, kickedUserId }: { sessionId: string; kickedUserId: string }) => {
+    io.to(sessionId).emit("player_kicked", { kickedUserId });
   });
 
   socket.on("start_session", ({ sessionId, players }: StartSessionData) => {
     console.log("📝 Session wird gestartet:", sessionId, players);
-
-    // Ensure the starter is in the room
     socket.join(sessionId);
+
+    readyState[sessionId] = [];
+    io.to(sessionId).emit("update_ready", []);
 
     if (!rooms[sessionId]) {
       rooms[sessionId] = {
@@ -99,7 +145,10 @@ io.on("connection", (socket: Socket) => {
         currentTurnIndex: 0,
         blindsIndex: 0,
         deck: new Deck(),
-        cards: []
+        cards: [],
+        roundNumber: 0,
+        smallBlind: "",
+        bigBlind: "",
       };
     }
 
@@ -111,125 +160,122 @@ io.on("connection", (socket: Socket) => {
       checked: false,
       allIn: false,
       cards: [],
-      score: 0
-     }));
+      score: 0,
+    }));
     room.locked = true;
-    
-   
-    
+    room.roundNumber = 0;
+
     StartNewRound(room, sessionId);
   });
 
-  socket.on("check_call", ({ sessionId, playerName, amount }: CheckCallData) => {
-    console.log("📥 check_call received:", { sessionId, playerName });
+  socket.on("check_call", ({ sessionId, playerName }: CheckCallData) => {
     const room = rooms[sessionId];
     if (!room) return;
-    
+
     const member = room.members.find((m) => m.name === playerName);
-    
-    // Determine the maximum settedChips on the table
     const maxSettedChips = Math.max(...room.members.map((m) => m.settedChips));
-    console.log(`💰 Max settedChips on table: ${maxSettedChips}`);
-    
-    // Calculate how much the player needs to call
     const currentPlayerBet = member ? member.settedChips : 0;
     const amountToCall = maxSettedChips - currentPlayerBet;
-    
-    console.log(`📊 ${playerName} has ${currentPlayerBet}, needs to call ${amountToCall} to match ${maxSettedChips}`);
 
-    if (member && amountToCall > 0) {
-        ChipsTransfer(room, sessionId, member, amountToCall);
-        
-    }
-    if (member) {
-      CheckThePlayers(room, sessionId, member);
-    }
+    if (member && amountToCall > 0) ChipsTransfer(room, sessionId, member, amountToCall);
+    if (member) CheckThePlayers(room, sessionId, member);
+
+    io.to(sessionId).emit("player_action", {
+      playerName,
+      action: "call",
+      amount: amountToCall,
+    });
 
     NextTurn(room, sessionId, 1);
-     
   });
 
-  socket.on("fold", ({sessionId, playerName}: FoldData) => {
-    console.log("📥 fold received:", { sessionId, playerName });
-
+  socket.on("fold", ({ sessionId, playerName }: FoldData) => {
     const room = rooms[sessionId];
     if (!room) return;
+
+    io.to(sessionId).emit("player_action", {
+      playerName,
+      action: "fold",
+    });
 
     QuitTurnOrder(room, sessionId);
     io.to(sessionId).emit("update_members", room.members);
     NextTurn(room, sessionId, 0);
-  })
+  });
 
   socket.on("raise", ({ sessionId, playerName, amount }: CheckCallData) => {
-    console.log("📥 raise received:", { sessionId, playerName, amount });
     const room = rooms[sessionId];
     if (!room) return;
     const member = room.members.find((m) => m.name === playerName);
 
     if (member) {
-        ChipsTransfer(room, sessionId, member, amount ?? 0);
-        KillCheckedStatus(room, sessionId);
-        CheckThePlayers(room, sessionId, member);
-        NextTurn(room, sessionId, 1);
-    }
-    });
+      ChipsTransfer(room, sessionId, member, amount ?? 0);
+      KillCheckedStatus(room, sessionId);
+      CheckThePlayers(room, sessionId, member);
 
-  socket.on("continue", (sessionId : string) => {
-    console.log("🔄 Spieler möchte weiterspielen in Session:", sessionId);
+      io.to(sessionId).emit("player_action", {
+        playerName,
+        action: "raise",
+        amount,
+      });
+
+      NextTurn(room, sessionId, 1);
+    }
+  });
+
+  socket.on("continue", (sessionId: string) => {
     const room = rooms[sessionId];
     if (!room) return;
     StartNewRound(room, sessionId);
   });
 
-  socket.on("finish", (sessionId : string) => {
-    console.log("🏁 Spieler möchte Spiel beenden in Session:", sessionId);
+  socket.on("finish", (sessionId: string) => {
     const room = rooms[sessionId];
     if (!room) return;
     CloseTheGame(room, sessionId);
   });
 
+  function emitTurnUpdate(room: Room, sessionId: string): void {
+    io.to(sessionId).emit("update_turn", {
+      turnOrder: room.turnOrder,
+      currentPlayer: room.turnOrder[room.currentTurnIndex],
+      phase: room.phase,
+      tableCards: room.cards,
+      smallBlind: room.smallBlind,
+      bigBlind: room.bigBlind,
+      roundNumber: room.roundNumber,
+    });
+  }
+
   function CloseTheGame(room: Room, sessionId: string): void {
-    console.log("🏆 Spiel endet in Session:", sessionId);
     room.locked = false;
     io.to(sessionId).emit("game_finished");
   }
 
   function NextTurn(room: Room, sessionId: string, turnSteps: number): void {
-    console.log("➡️ Nächster Spieler ist dran in Session:", sessionId);
-
     if (turnSteps) {
       room.currentTurnIndex = (room.currentTurnIndex + turnSteps) % room.turnOrder.length;
     }
 
-    // Check if all players in turnOrder have checked
     if (room.turnOrder.every((playerName) => {
       const player = room.members.find((p) => p.name === playerName);
       return player?.checked ?? false;
     })) {
-        NextPhase(room, sessionId);
-    } 
-    
-    io.to(sessionId).emit("update_turn", {
-      turnOrder: room.turnOrder,
-      currentPlayer: room.turnOrder[room.currentTurnIndex],
-      phase: room.phase,
-      tableCards: room.cards
-    });
+      NextPhase(room, sessionId);
+    }
+
+    emitTurnUpdate(room, sessionId);
   }
 
   function ChipsTransfer(room: Room, sessionId: string, player: Player, amount: number): void {
-    console.log(`💰 Spieler ${player.name} setzt ${amount} Chips in Session:`, sessionId);
     if (amount < player.chips) {
-        player.chips -= amount;
-        player.settedChips += amount;
+      player.chips -= amount;
+      player.settedChips += amount;
+    } else {
+      player.settedChips += player.chips;
+      player.chips = 0;
+      GoAllin(room, sessionId, player);
     }
-    else {
-        // Player goes all-in
-        player.settedChips += player.chips;
-        player.chips = 0;
-        GoAllin(room, sessionId, player);
-    }
-    
     io.to(sessionId).emit("update_members", room.members);
   }
 
@@ -238,11 +284,9 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("update_members", room.members);
   }
 
-
   function StartNewRound(room: Room, sessionId: string): void {
     room.phase = 0;
-
-    // Reset all setchips and allIn status
+    room.roundNumber += 1;
     room.members.forEach((p) => {
       p.settedChips = 0;
       p.checked = false;
@@ -250,38 +294,27 @@ io.on("connection", (socket: Socket) => {
       p.score = 0;
     });
 
-    
-    // Reset turn order for next round - only players with chips > 0
     room.turnOrder = room.members.filter((p) => p.chips > 0).map((p) => p.name);
-
     room.cards = [];
-
-    // Reset and shuffle the deck
     room.deck.reset();
 
-
-
-    // Deal two cards to each player
     room.members.forEach((p) => {
-      if(room.turnOrder.includes(p.name)) {
+      if (room.turnOrder.includes(p.name)) {
         const playerCards = room.deck.drawTwoCards();
         p.cards = playerCards ? playerCards : [];
       }
     });
 
-    // Set currentTurnIndex AFTER turnOrder is set
-    room.currentTurnIndex = (room.blindsIndex) % room.turnOrder.length;
+    room.currentTurnIndex = room.blindsIndex % room.turnOrder.length;
     room.blindsIndex += 1;
+
+    room.smallBlind = room.turnOrder[room.currentTurnIndex] ?? "";
+    room.bigBlind = room.turnOrder[(room.currentTurnIndex + 1) % room.turnOrder.length] ?? "";
 
     io.to(sessionId).emit("update_members", room.members);
     io.to(sessionId).emit("session_started");
     io.to(sessionId).emit("round_continues");
-    io.to(sessionId).emit("update_turn", {
-      turnOrder: room.turnOrder,
-      currentPlayer: room.turnOrder[room.currentTurnIndex],
-      phase: room.phase,
-      tableCards: room.cards
-    });
+    emitTurnUpdate(room, sessionId);
 
     NextPhase(room, sessionId);
   }
@@ -294,32 +327,23 @@ io.on("connection", (socket: Socket) => {
   function QuitTurnOrder(room: Room, sessionId: string): void {
     room.turnOrder.splice(room.currentTurnIndex, 1);
 
-    // Check if only one player remains
     if (room.turnOrder.length === 1) {
-        // Check if the remaining player has checked
-        if (room.members.find(m => m.name === room.turnOrder[0])?.checked) {  
-            WinnerOfTheRound(room, sessionId);
-        }
-        else {
-            const hasAllInPlayer = room.members.some((p) => p.allIn);
-            if (!hasAllInPlayer) {
-                WinnerOfTheRound(room, sessionId);
-            }
-            
-        }
-
-    }
-    if (room.turnOrder.length === 0) {
+      if (room.members.find((m) => m.name === room.turnOrder[0])?.checked) {
         WinnerOfTheRound(room, sessionId);
+      } else {
+        const hasAllInPlayer = room.members.some((p) => p.allIn);
+        if (!hasAllInPlayer) WinnerOfTheRound(room, sessionId);
+      }
     }
+
+    if (room.turnOrder.length === 0) WinnerOfTheRound(room, sessionId);
 
     if (room.currentTurnIndex >= room.turnOrder.length) {
-      room.currentTurnIndex = 0; // Wrap to first player
+      room.currentTurnIndex = 0;
     }
   }
 
   function GoAllin(room: Room, sessionId: string, player: Player): void {
-    console.log(`💥 Spieler ${player.name} geht All-In in Session:`, sessionId);
     player.allIn = true;
     QuitTurnOrder(room, sessionId);
     io.to(sessionId).emit("update_members", room.members);
@@ -327,128 +351,96 @@ io.on("connection", (socket: Socket) => {
 
   function WinnerOfTheRound(room: Room, sessionId: string): void {
     let winnerName: string;
-    
-    // Add all-in players back to turnOrder
+
     const allInPlayers = room.members.filter((p) => p.allIn);
     allInPlayers.forEach((p) => {
       if (!room.turnOrder.includes(p.name)) {
         room.turnOrder.push(p.name);
-        console.log(`➕ All-in player ${p.name} added back to turnOrder`);
       }
     });
 
+    const playerHandTypes: Record<string, string> = {};
+    const hasAllCards = room.cards.length === 5;
+
     if (room.turnOrder.length === 1) {
-      //Der einzige verbleibende Spieler gewinnt
       winnerName = room.turnOrder[0]!;
-      console.log("🏆 Spieler gewinnt:", winnerName);
-    }
-    else {
+    } else {
       let highestScore = -1;
-      winnerName = "Tim";
+      winnerName = room.turnOrder[0]!;
       room.turnOrder.forEach((playerName) => {
         const player = room.members.find((p) => p.name === playerName);
         if (player) {
-          let scorepoint = evaluateHighestCard(room.cards, player.cards);
-          player.score = scorepoint.score;
-          if (scorepoint.score > highestScore) {
-            highestScore = scorepoint.score;
+          const result = evaluateHighestCard(room.cards, player.cards);
+          player.score = result.score;
+          if (hasAllCards && result.handType) {
+            playerHandTypes[playerName] = result.handType as string;
+          }
+          if (result.score > highestScore) {
+            highestScore = result.score;
             winnerName = player.name;
           }
         }
-        });
-      
+      });
     }
-    
-    // Calculate total pot
+
     const totalPot = room.members.reduce((sum, p) => sum + p.settedChips, 0);
-    console.log(`💰 Total Pot: ${totalPot} Chips`);
-    
-    // Give all chips to winner
     const winner = room.members.find((p) => p.name === winnerName);
-    if (winner) {
-      winner.chips += totalPot;
-      console.log(`🎉 ${winnerName} erhält ${totalPot} Chips`);
-    }
-    
-    
+    if (winner) winner.chips += totalPot;
+
+    const playerHands = room.members.map((p) => ({
+      name: p.name,
+      cards: p.cards,
+      handType: playerHandTypes[p.name] ?? null,
+      chips: p.chips,
+    }));
+
     io.to(sessionId).emit("update_members", room.members);
-    io.to(sessionId).emit("round_ends", { 
-      winnerName, 
-      totalPot 
-    });
+    io.to(sessionId).emit("round_ends", { winnerName, totalPot, playerHands });
   }
 
   function NextPhase(room: Room, sessionId: string): void {
-    console.log("🔄 Neue Runde startet in Session:", sessionId);
     room.phase += 1;
-    
     KillCheckedStatus(room, sessionId);
 
     switch (room.phase) {
-    case 1:
-      // Zwei Karten für jeden Spieler werden ausgeteilt
-      console.log("🌟 Pre-Flop Phase gestartet");
+      case 1:
+        const player1 = room.members.find((m) => m.name === room.turnOrder[room.currentTurnIndex]);
+        if (player1) ChipsTransfer(room, sessionId, player1, 10);
+        NextTurn(room, sessionId, 1);
 
-      const player1 = room.members.find(m => m.name === room.turnOrder[room.currentTurnIndex]);
-      if (player1) ChipsTransfer(room, sessionId, player1, 10);
-      NextTurn(room, sessionId, 1);
+        const player2 = room.members.find((m) => m.name === room.turnOrder[room.currentTurnIndex]);
+        if (player2) {
+          ChipsTransfer(room, sessionId, player2, 20);
+          CheckThePlayers(room, sessionId, player2);
+        }
+        NextTurn(room, sessionId, 1);
+        break;
 
-      const player2 = room.members.find(m => m.name === room.turnOrder[room.currentTurnIndex]);
-      if (player2) {
-        ChipsTransfer(room, sessionId, player2, 20);
-        CheckThePlayers(room, sessionId, player2);
-      }
-      NextTurn(room, sessionId, 1);
+      case 2:
+        room.cards[0] = room.deck.drawOneCard() ?? [];
+        room.cards[1] = room.deck.drawOneCard() ?? [];
+        room.cards[2] = room.deck.drawOneCard() ?? [];
+        break;
 
-      break;
+      case 3:
+        room.cards[3] = room.deck.drawOneCard() ?? [];
+        break;
 
-    case 2:
-      // Pick three community cards (the flop)
-      const TableCard1 = room.deck.drawOneCard();
-      const TableCard2 = room.deck.drawOneCard();
-      const TableCard3 = room.deck.drawOneCard();
-      room.cards[0] = TableCard1 ?? [];
-      room.cards[1] = TableCard2 ?? [];
-      room.cards[2] = TableCard3 ?? [];
-      
-      console.log("🌟 Flop Phase gestartet");
-      break;
+      case 4:
+        room.cards[4] = room.deck.drawOneCard() ?? [];
+        break;
 
-    case 3:
-      // Pick the fourth community card (the turn)
-      const TableCard4 = room.deck.drawOneCard();
-      room.cards[3] = TableCard4 ?? [];
+      case 5:
+        if (sessionId) WinnerOfTheRound(room, sessionId);
+        break;
 
-      console.log("🌟 Turn Phase gestartet");
-      break;
-
-    case 4:
-      // Pick the fifth community card (the river)
-      const TableCard5 = room.deck.drawOneCard();
-      room.cards[4] = TableCard5 ?? [];
-
-      console.log("🌟 River Phase gestartet");
-      break;
-
-    case 5:
-      // Showdown - determine winner
-      console.log("🌟 Gewinner wird ausgewertet");
-      if (sessionId) {
-        WinnerOfTheRound(room, sessionId);
-      }
-      break;
-
-    default:
-      // Optional: falls der Wert keiner bekannten Phase entspricht
-      console.log("Unbekannte Phase");
-    
+      default:
+        console.log("⚠️ Unbekannte Phase:", room.phase);
     }
-    // Emit update to all clients
+
     io.to(sessionId).emit("update_members", room.members);
   }
 });
-
-
 
 const clientPath = path.join(__dirname, "../client/build");
 app.use(express.static(clientPath));
