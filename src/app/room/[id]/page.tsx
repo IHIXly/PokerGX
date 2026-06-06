@@ -49,6 +49,7 @@ export default function RoomPage() {
 
   const updateChipsMutation = api.poker.updateSessionChips.useMutation();
   const kickPlayerMutation = api.poker.kickPlayer.useMutation();
+  const leaveSessionMutation = api.poker.leaveSession.useMutation();
 
   const [codeCopied, setCodeCopied] = useState(false);
   const [chipsInput, setChipsInput] = useState("1000");
@@ -101,6 +102,10 @@ export default function RoomPage() {
     socket.on("player_joined", () => {
       void refetch();
       toast("Ein Spieler ist beigetreten 👋", { icon: "🃏", id: "player-join" });
+    });
+    socket.on("player_left", () => {
+      void refetch();
+      toast("Ein Spieler hat den Raum verlassen.", { icon: "🃏", id: "player-left" });
     });
     socket.on("chips_updated", () => void refetch());
     socket.on("player_kicked", ({ kickedUserId }: { kickedUserId: string }) => {
@@ -375,7 +380,16 @@ export default function RoomPage() {
           )}
 
           <button
-            onClick={() => router.push("/")}
+            onClick={async () => {
+              try {
+                await leaveSessionMutation.mutateAsync({ sessionId });
+                socketRef.current?.emit("leave_session", sessionId);
+                socketRef.current?.disconnect();
+                router.push("/");
+              } catch (err) {
+                toast.error("Fehler beim Verlassen des Raums.");
+              }
+            }}
             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-800 py-2 text-xs text-slate-600 transition hover:bg-slate-800/50 hover:text-slate-400"
           >
             <LogOut size={12} /> Raum verlassen

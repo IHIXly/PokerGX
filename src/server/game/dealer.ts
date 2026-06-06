@@ -121,6 +121,12 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("update_ready", readyState[sessionId]);
   });
 
+  socket.on("leave_session", (sessionId: string) => {
+      console.log("👋 Client verlässt den Raum:", sessionId, socket.id);
+      socket.to(sessionId).emit("player_left");
+      socket.leave(sessionId);
+    });
+
   socket.on("chips_updated", (sessionId: string) => {
     io.to(sessionId).emit("chips_updated");
   });
@@ -250,6 +256,8 @@ io.on("connection", (socket: Socket) => {
   function CloseTheGame(room: Room, sessionId: string): void {
     room.locked = false;
     io.to(sessionId).emit("game_finished");
+    delete rooms[sessionId];
+    delete readyState[sessionId];
   }
 
   function NextTurn(room: Room, sessionId: string, turnSteps: number): void {
