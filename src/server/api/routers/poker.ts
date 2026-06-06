@@ -345,4 +345,17 @@ export const pokerRouter = createTRPCRouter({
         },
       });
     }),
+
+  // ✅ Spieler verlässt die Session (selbst entfernen)
+  leaveSession: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      await ctx.db.pokerSessionUser.deleteMany({
+        where: { pokerSessionId: input.sessionId, userId },
+      });
+
+      return { sessionId: input.sessionId };
+    }),
 });
