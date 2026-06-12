@@ -487,6 +487,7 @@ export default function PokerGamePage() {
     socketRef.current?.emit("start_session", {
       sessionId,
       players: session.users.map((u: any) => ({ name: u.user.name ?? "Unbekannt", chips: u.chips })),
+      gameMode: "poker", //Placeholder
     });
   };
 

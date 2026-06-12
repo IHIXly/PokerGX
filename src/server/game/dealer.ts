@@ -4,7 +4,13 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { Deck, evaluateHighestCard } from "./cards";
+import type {
+  ChatData,
+  ReadyData,
+  Room,
+  RoundResult,
+} from "./poker";
+import { PokerGame } from "./poker";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,55 +29,10 @@ const io = new Server(server, {
   transports: ["websocket", "polling"],
 });
 
-interface Player {
-  name: string;
-  chips: number;
-  settedChips: number;
-  checked: boolean;
-  allIn: boolean;
-  cards: number[][];
-  score: number;
-}
-
-interface Room {
-  members: Player[];
-  locked: boolean;
-  phase: number;
-  turnOrder: string[];
-  currentTurnIndex: number;
-  blindsIndex: number;
-  deck: Deck;
-  cards: number[][];
-  roundNumber: number;
-  smallBlind: string;
-  bigBlind: string;
-}
-
 interface StartSessionData {
   sessionId: string;
   players: Array<{ name: string; chips?: number }>;
-}
-
-interface CheckCallData {
-  sessionId: string;
-  playerName: string;
-  amount?: number;
-}
-
-interface FoldData {
-  sessionId: string;
-  playerName: string;
-}
-
-interface ChatData {
-  sessionId: string;
-  playerName: string;
-  message: string;
-}
-
-interface ReadyData {
-  sessionId: string;
-  playerName: string;
+  gameMode: string;
 }
 
 const rooms: Record<string, Room> = {};
@@ -84,19 +45,7 @@ io.on("connection", (socket: Socket) => {
     socket.join(sessionId);
     console.log("👋 Client ist Raum beigetreten:", sessionId, socket.id);
     socket.to(sessionId).emit("player_joined");
-    const room = rooms[sessionId];
-    if (room && room.turnOrder && room.turnOrder.length > 0) {
-      socket.emit("update_turn", {
-        turnOrder: room.turnOrder,
-        currentPlayer: room.turnOrder[room.currentTurnIndex],
-        phase: room.phase,
-        tableCards: room.cards,
-        smallBlind: room.smallBlind,
-        bigBlind: room.bigBlind,
-        roundNumber: room.roundNumber,
-      });
-      socket.emit("update_members", room.members);
-    }
+
     if (readyState[sessionId]) {
       socket.emit("update_ready", readyState[sessionId]);
     }
@@ -122,10 +71,10 @@ io.on("connection", (socket: Socket) => {
   });
 
   socket.on("leave_session", (sessionId: string) => {
-      console.log("👋 Client verlässt den Raum:", sessionId, socket.id);
-      socket.to(sessionId).emit("player_left");
-      socket.leave(sessionId);
-    });
+    console.log("👋 Client verlässt den Raum:", sessionId, socket.id);
+    socket.to(sessionId).emit("player_left");
+    socket.leave(sessionId);
+  });
 
   socket.on("chips_updated", (sessionId: string) => {
     io.to(sessionId).emit("chips_updated");
@@ -135,320 +84,163 @@ io.on("connection", (socket: Socket) => {
     io.to(sessionId).emit("player_kicked", { kickedUserId });
   });
 
-  socket.on("start_session", ({ sessionId, players }: StartSessionData) => {
+  socket.on("start_session", ({ sessionId, players, gameMode }: StartSessionData) => {
     console.log("📝 Session wird gestartet:", sessionId, players);
+
     socket.join(sessionId);
 
     readyState[sessionId] = [];
     io.to(sessionId).emit("update_ready", []);
 
+    let Game: any;
+
+    switch (gameMode) {
+      case "poker":
+        Game = PokerGame;
+        
+        break;
+
+      default:
+        console.warn("Unbekannter Spielmodus:", gameMode);
+        return;
+    }
+
     if (!rooms[sessionId]) {
-      rooms[sessionId] = {
-        members: [],
-        locked: false,
-        phase: 0,
-        turnOrder: [],
-        currentTurnIndex: 0,
-        blindsIndex: 0,
-        deck: new Deck(),
-        cards: [],
-        roundNumber: 0,
-        smallBlind: "",
-        bigBlind: "",
-      };
+      rooms[sessionId] = Game.createRoom();
     }
 
     const room = rooms[sessionId]!;
-    room.members = players.map((p) => ({
-      name: p.name,
-      chips: p.chips ?? 1000,
-      settedChips: 0,
-      checked: false,
-      allIn: false,
-      cards: [],
-      score: 0,
-    }));
+
     room.locked = true;
     room.roundNumber = 0;
 
-    StartNewRound(room, sessionId);
-  });
+    Game.initializeRoomMembers(room, players);
 
-  socket.on("check_call", ({ sessionId, playerName }: CheckCallData) => {
-    const room = rooms[sessionId];
-    if (!room) return;
+    const roundResult = Game.startNewRound(room);
 
-    const member = room.members.find((m) => m.name === playerName);
-    const maxSettedChips = Math.max(...room.members.map((m) => m.settedChips));
-    const currentPlayerBet = member ? member.settedChips : 0;
-    const amountToCall = maxSettedChips - currentPlayerBet;
+    emitSessionStarted(room, sessionId);
 
-    if (member && amountToCall > 0) ChipsTransfer(room, sessionId, member, amountToCall);
-    if (member) CheckThePlayers(room, sessionId, member);
+    if (roundResult) {
+      emitRoundResult(room, sessionId, roundResult);
+    }
 
-    io.to(sessionId).emit("player_action", {
-      playerName,
-      action: "call",
-      amount: amountToCall,
+    socket.on("continue", (sessionId: string) => {
+      const room = rooms[sessionId];
+      if (!room) return;
+
+      const roundResult = Game.handleContinue(room);
+      emitSessionStarted(room, sessionId);
+
+      if (roundResult) {
+        emitRoundResult(room, sessionId, roundResult);
+      }
     });
 
-    NextTurn(room, sessionId, 1);
+    socket.on("finish", (sessionId: string) => {
+      const room = rooms[sessionId];
+      if (!room) return;
+
+      Game.closeTheGame(room);
+      io.to(sessionId).emit("game_finished");
+      delete rooms[sessionId];
+      delete readyState[sessionId];
+    });
   });
 
-  socket.on("fold", ({ sessionId, playerName }: FoldData) => {
+  
+
+  
+
+
+  // Poker
+  socket.on("check_call", ({ sessionId, playerName }: { sessionId: string; playerName: string }) => {
     const room = rooms[sessionId];
     if (!room) return;
 
+    const result = PokerGame.handleCheckCall(room, playerName);
+    if (!result) return;
+
+    io.to(sessionId).emit("player_action", {
+      playerName: result.playerName,
+      action: result.action,
+      amount: result.amount,
+    });
+    io.to(sessionId).emit("update_members", room.members);
+
+    if (result.roundResult) {
+      emitRoundResult(room, sessionId, result.roundResult);
+    } else {
+      emitTurnUpdate(room, sessionId);
+    }
+  });
+
+  socket.on("fold", ({ sessionId, playerName }: { sessionId: string; playerName: string }) => {
+    const room = rooms[sessionId];
+    if (!room) return;
+
+    const result = PokerGame.handleFold(room, playerName);
     io.to(sessionId).emit("player_action", {
       playerName,
       action: "fold",
     });
-
-    QuitTurnOrder(room, sessionId);
     io.to(sessionId).emit("update_members", room.members);
-    NextTurn(room, sessionId, 0);
-  });
 
-  socket.on("raise", ({ sessionId, playerName, amount }: CheckCallData) => {
-    const room = rooms[sessionId];
-    if (!room) return;
-    const member = room.members.find((m) => m.name === playerName);
-
-    if (member) {
-      ChipsTransfer(room, sessionId, member, amount ?? 0);
-      KillCheckedStatus(room, sessionId);
-      CheckThePlayers(room, sessionId, member);
-
-      io.to(sessionId).emit("player_action", {
-        playerName,
-        action: "raise",
-        amount,
-      });
-
-      NextTurn(room, sessionId, 1);
-    }
-  });
-
-  socket.on("continue", (sessionId: string) => {
-    const room = rooms[sessionId];
-    if (!room) return;
-    StartNewRound(room, sessionId);
-  });
-
-  socket.on("finish", (sessionId: string) => {
-    const room = rooms[sessionId];
-    if (!room) return;
-    CloseTheGame(room, sessionId);
-  });
-
-  function emitTurnUpdate(room: Room, sessionId: string): void {
-    io.to(sessionId).emit("update_turn", {
-      turnOrder: room.turnOrder,
-      currentPlayer: room.turnOrder[room.currentTurnIndex],
-      phase: room.phase,
-      tableCards: room.cards,
-      smallBlind: room.smallBlind,
-      bigBlind: room.bigBlind,
-      roundNumber: room.roundNumber,
-    });
-  }
-
-  function CloseTheGame(room: Room, sessionId: string): void {
-    room.locked = false;
-    io.to(sessionId).emit("game_finished");
-    delete rooms[sessionId];
-    delete readyState[sessionId];
-  }
-
-  function NextTurn(room: Room, sessionId: string, turnSteps: number): void {
-    if (turnSteps) {
-      room.currentTurnIndex = (room.currentTurnIndex + turnSteps) % room.turnOrder.length;
-    }
-
-    if (room.turnOrder.every((playerName) => {
-      const player = room.members.find((p) => p.name === playerName);
-      return player?.checked ?? false;
-    })) {
-      NextPhase(room, sessionId);
-    }
-
-    emitTurnUpdate(room, sessionId);
-  }
-
-  function ChipsTransfer(room: Room, sessionId: string, player: Player, amount: number): void {
-    if (amount < player.chips) {
-      player.chips -= amount;
-      player.settedChips += amount;
+    if (result?.roundResult) {
+      emitRoundResult(room, sessionId, result.roundResult);
     } else {
-      player.settedChips += player.chips;
-      player.chips = 0;
-      GoAllin(room, sessionId, player);
+      emitTurnUpdate(room, sessionId);
     }
-    io.to(sessionId).emit("update_members", room.members);
-  }
+  });
 
-  function CheckThePlayers(room: Room, sessionId: string, player: Player): void {
-    player.checked = true;
-    io.to(sessionId).emit("update_members", room.members);
-  }
+  socket.on("raise", ({ sessionId, playerName, amount }: { sessionId: string; playerName: string; amount?: number }) => {
+    const room = rooms[sessionId];
+    if (!room || amount === undefined) return;
 
-  function StartNewRound(room: Room, sessionId: string): void {
-    room.phase = 0;
-    room.roundNumber += 1;
-    room.members.forEach((p) => {
-      p.settedChips = 0;
-      p.checked = false;
-      p.allIn = false;
-      p.score = 0;
+    const result = PokerGame.handleRaise(room, playerName, amount);
+    if (!result) return;
+
+    io.to(sessionId).emit("player_action", {
+      playerName,
+      action: result.action,
+      amount: result.amount,
     });
-
-    room.turnOrder = room.members.filter((p) => p.chips > 0).map((p) => p.name);
-    room.cards = [];
-    room.deck.reset();
-
-    room.members.forEach((p) => {
-      if (room.turnOrder.includes(p.name)) {
-        const playerCards = room.deck.drawTwoCards();
-        p.cards = playerCards ? playerCards : [];
-      }
-    });
-
-    room.currentTurnIndex = room.blindsIndex % room.turnOrder.length;
-    room.blindsIndex += 1;
-
-    room.smallBlind = room.turnOrder[room.currentTurnIndex] ?? "";
-    room.bigBlind = room.turnOrder[(room.currentTurnIndex + 1) % room.turnOrder.length] ?? "";
-
     io.to(sessionId).emit("update_members", room.members);
-    io.to(sessionId).emit("session_started");
-    io.to(sessionId).emit("round_continues");
-    emitTurnUpdate(room, sessionId);
 
-    NextPhase(room, sessionId);
-  }
-
-  function KillCheckedStatus(room: Room, sessionId: string): void {
-    room.members.forEach((p) => (p.checked = false));
-    io.to(sessionId).emit("update_members", room.members);
-  }
-
-  function QuitTurnOrder(room: Room, sessionId: string): void {
-    room.turnOrder.splice(room.currentTurnIndex, 1);
-
-    if (room.turnOrder.length === 1) {
-      if (room.members.find((m) => m.name === room.turnOrder[0])?.checked) {
-        WinnerOfTheRound(room, sessionId);
-      } else {
-        const hasAllInPlayer = room.members.some((p) => p.allIn);
-        if (!hasAllInPlayer) WinnerOfTheRound(room, sessionId);
-      }
-    }
-
-    if (room.turnOrder.length === 0) WinnerOfTheRound(room, sessionId);
-
-    if (room.currentTurnIndex >= room.turnOrder.length) {
-      room.currentTurnIndex = 0;
-    }
-  }
-
-  function GoAllin(room: Room, sessionId: string, player: Player): void {
-    player.allIn = true;
-    QuitTurnOrder(room, sessionId);
-    io.to(sessionId).emit("update_members", room.members);
-  }
-
-  function WinnerOfTheRound(room: Room, sessionId: string): void {
-    let winnerName: string;
-
-    const allInPlayers = room.members.filter((p) => p.allIn);
-    allInPlayers.forEach((p) => {
-      if (!room.turnOrder.includes(p.name)) {
-        room.turnOrder.push(p.name);
-      }
-    });
-
-    const playerHandTypes: Record<string, string> = {};
-    const hasAllCards = room.cards.length === 5;
-
-    if (room.turnOrder.length === 1) {
-      winnerName = room.turnOrder[0]!;
+    if (result.roundResult) {
+      emitRoundResult(room, sessionId, result.roundResult);
     } else {
-      let highestScore = -1;
-      winnerName = room.turnOrder[0]!;
-      room.turnOrder.forEach((playerName) => {
-        const player = room.members.find((p) => p.name === playerName);
-        if (player) {
-          const result = evaluateHighestCard(room.cards, player.cards);
-          player.score = result.score;
-          if (hasAllCards && result.handType) {
-            playerHandTypes[playerName] = result.handType as string;
-          }
-          if (result.score > highestScore) {
-            highestScore = result.score;
-            winnerName = player.name;
-          }
-        }
-      });
+      emitTurnUpdate(room, sessionId);
     }
+  });
 
-    const totalPot = room.members.reduce((sum, p) => sum + p.settedChips, 0);
-    const winner = room.members.find((p) => p.name === winnerName);
-    if (winner) winner.chips += totalPot;
-
-    const playerHands = room.members.map((p) => ({
-      name: p.name,
-      cards: p.cards,
-      handType: playerHandTypes[p.name] ?? null,
-      chips: p.chips,
-    }));
-
-    io.to(sessionId).emit("update_members", room.members);
-    io.to(sessionId).emit("round_ends", { winnerName, totalPot, playerHands });
-  }
-
-  function NextPhase(room: Room, sessionId: string): void {
-    room.phase += 1;
-    KillCheckedStatus(room, sessionId);
-
-    switch (room.phase) {
-      case 1:
-        const player1 = room.members.find((m) => m.name === room.turnOrder[room.currentTurnIndex]);
-        if (player1) ChipsTransfer(room, sessionId, player1, 10);
-        NextTurn(room, sessionId, 1);
-
-        const player2 = room.members.find((m) => m.name === room.turnOrder[room.currentTurnIndex]);
-        if (player2) {
-          ChipsTransfer(room, sessionId, player2, 20);
-          CheckThePlayers(room, sessionId, player2);
-        }
-        NextTurn(room, sessionId, 1);
-        break;
-
-      case 2:
-        room.cards[0] = room.deck.drawOneCard() ?? [];
-        room.cards[1] = room.deck.drawOneCard() ?? [];
-        room.cards[2] = room.deck.drawOneCard() ?? [];
-        break;
-
-      case 3:
-        room.cards[3] = room.deck.drawOneCard() ?? [];
-        break;
-
-      case 4:
-        room.cards[4] = room.deck.drawOneCard() ?? [];
-        break;
-
-      case 5:
-        if (sessionId) WinnerOfTheRound(room, sessionId);
-        break;
-
-      default:
-        console.log("⚠️ Unbekannte Phase:", room.phase);
-    }
-
-    io.to(sessionId).emit("update_members", room.members);
-  }
+  
 });
+
+
+
+function emitSessionStarted(room: Room, sessionId: string): void {
+  io.to(sessionId).emit("update_members", room.members);
+  io.to(sessionId).emit("session_started");
+  io.to(sessionId).emit("round_continues");
+  emitTurnUpdate(room, sessionId);
+}
+
+function emitTurnUpdate(room: Room, sessionId: string): void {
+  io.to(sessionId).emit("update_turn", {
+    turnOrder: room.turnOrder,
+    currentPlayer: room.turnOrder[room.currentTurnIndex],
+    phase: room.phase,
+    tableCards: room.cards,
+    smallBlind: room.smallBlind,
+    bigBlind: room.bigBlind,
+    roundNumber: room.roundNumber,
+  });
+}
+
+function emitRoundResult(room: Room, sessionId: string, result: RoundResult): void {
+  io.to(sessionId).emit("update_members", room.members);
+  io.to(sessionId).emit("round_ends", result);
+}
 
 const clientPath = path.join(__dirname, "../client/build");
 app.use(express.static(clientPath));
