@@ -238,33 +238,6 @@ export default function RoomPage() {
             <p className="text-xs text-slate-600">Code teilen zum Beitreten</p>
           </div>
 
-          {/* Starting chips editor — host only */}
-          {isHost && (
-            <div className="mb-5 rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
-                Startchips — alle Spieler
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={chipsInput}
-                  min={1}
-                  onChange={(e) => setChipsInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && applyChips()}
-                  className="w-32 rounded-lg bg-slate-700 px-3 py-2 text-center font-mono text-sm text-slate-100 outline-none focus:ring-1 focus:ring-emerald-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-                <button
-                  onClick={applyChips}
-                  disabled={updateChipsMutation.isPending}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-50 transition hover:bg-emerald-600 disabled:opacity-50"
-                >
-                  {updateChipsMutation.isPending && <Loader2 size={11} className="animate-spin" />}
-                  Übernehmen
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Player list */}
           <div className="mb-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
