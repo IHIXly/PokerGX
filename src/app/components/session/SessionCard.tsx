@@ -36,8 +36,6 @@ export function SessionCard({
 	const isInSession = session.users.some((u) => u.user.id === userId);
 	const isEnded = session.status === "beendet" || session.status === "finished";
 	const statusStyle = STATUS_STYLES[session.status] ?? DEFAULT_STATUS_STYLE;
-	const firstUserChips = session.users[0]?.chips;
-	const hasChips = session.users.length > 0 && firstUserChips !== undefined;
 
 	return (
 		<li
@@ -84,12 +82,10 @@ export function SessionCard({
 					<span className="flex items-center gap-1">
 						<Users size={11} /> {session.users.length} Spieler
 					</span>
-					{hasChips && (
-						<span className="flex items-center gap-1">
-							<ChipIcon className="h-3 w-3" />
-							{firstUserChips} Chips
-						</span>
-					)}
+					<span className="flex items-center gap-1">
+						<ChipIcon className="h-3 w-3" />
+						{session.buyIn} Buy-In
+					</span>
 					{session.createdAt && (
 						<span>
 							{formatDistanceToNow(session.createdAt, {

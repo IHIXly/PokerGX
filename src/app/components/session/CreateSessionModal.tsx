@@ -2,15 +2,19 @@
 
 import { Loader2, Lock, Plus } from "lucide-react";
 import type { MouseEvent } from "react";
+import { ChipIcon } from "./ChipIcon";
 
 export interface CreateSessionModalProps {
 	name: string;
+	buyIn: string;
 	privateSession: boolean;
 	isPending: boolean;
 	onNameChange: (name: string) => void;
+	onBuyInChange: (buyIn: string) => void;
 	onPrivateChange: (privateSession: boolean) => void;
 	onCreate: (input: {
 		name: string;
+		buyIn: number;
 		privateSession: boolean;
 	}) => void;
 	onClose: () => void;
@@ -18,21 +22,29 @@ export interface CreateSessionModalProps {
 
 export function CreateSessionModal({
 	name,
+	buyIn,
 	privateSession,
 	isPending,
 	onNameChange,
+	onBuyInChange,
 	onPrivateChange,
 	onCreate,
 	onClose,
 }: CreateSessionModalProps) {
 	const trimmedName = name.trim();
-	const canCreate = trimmedName.length >= 3;
+	const parsedBuyIn = Number(buyIn);
+	const isValidBuyIn =
+		Number.isInteger(parsedBuyIn) &&
+		parsedBuyIn >= 1 &&
+		parsedBuyIn <= 1_000_000;
+	const canCreate = trimmedName.length >= 3 && isValidBuyIn;
 
 	const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
 		if (e.target === e.currentTarget) onClose();
 	};
 
-	const create = () => onCreate({ name: trimmedName, privateSession });
+	const create = () =>
+		onCreate({ name: trimmedName, buyIn: parsedBuyIn, privateSession });
 
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: Preserve the existing backdrop-click close behavior.
@@ -69,6 +81,32 @@ export function CreateSessionModal({
 						/>
 						<p className="mt-1 text-right text-[10px] text-slate-600">
 							{name.length}/50
+						</p>
+					</div>
+					<div>
+						<label
+							htmlFor="create-session-buy-in"
+							className="mb-1.5 block font-semibold text-slate-400 text-xs"
+						>
+							Buy-In
+						</label>
+						<div className="relative">
+							<ChipIcon className="-translate-y-1/2 absolute top-1/2 left-3 h-3.5 w-3.5" />
+							<input
+								id="create-session-buy-in"
+								type="number"
+								inputMode="numeric"
+								value={buyIn}
+								min={1}
+								max={1_000_000}
+								onChange={(e) => onBuyInChange(e.target.value)}
+								onKeyDown={(e) => e.key === "Enter" && canCreate && create()}
+								placeholder="1000"
+								className="w-full rounded-lg bg-slate-800 px-3 py-2 pr-3 pl-8 text-slate-100 text-sm outline-none [appearance:textfield] placeholder:text-slate-500 focus:ring-2 focus:ring-emerald-600 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+							/>
+						</div>
+						<p className="mt-1 text-right text-[10px] text-slate-600">
+							Wird direkt aus deinem Wallet abgezogen
 						</p>
 					</div>
 					<button

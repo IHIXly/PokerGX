@@ -4,7 +4,6 @@ import DiscordProvider from "next-auth/providers/discord";
 import GitHubProvider from "next-auth/providers/github"; // 👈 hinzugefügt
 
 import CredentialsProvider from "next-auth/providers/credentials"; //Für Gast login
-import { randomUUID } from "crypto";
 
 import { db } from "@/server/db";
 
@@ -18,17 +17,18 @@ declare module "next-auth" {
 	interface Session extends DefaultSession {
 		user: {
 			id: string;
-			chips:number;
-      developer: boolean;
+			chips: number;
+			wallet: number;
+			developer: boolean;
 			// ...other properties
 			// role: UserRole;
 		} & DefaultSession["user"];
 	}
-  interface User {
-    developer?: boolean;
-    chips: number;
-}
-
+	interface User {
+		developer?: boolean;
+		chips: number;
+		wallet: number;
+	}
 }
 
 /**
@@ -38,69 +38,73 @@ declare module "next-auth" {
  */
 
 declare module "@auth/core/adapters" {
-  interface AdapterUser {
-    chips: number;
-    developer: boolean;
-  }
+	interface AdapterUser {
+		chips: number;
+		wallet: number;
+		developer: boolean;
+	}
 }
 
-
 export const authConfig = {
-  providers: [
-    DiscordProvider,
-    GitHubProvider,
-    CredentialsProvider({
-      name: "Guest Login",
-      credentials: {},
-      async authorize() {
-        const user = await db.user.create({
-          data: {
-            name: `Guest_${Math.floor(Math.random() * 10000)}`,
-            email: `guest_${randomUUID()}@poker.local`,
-            chips: 1000,
-            image: "/Guest.png",
-          },
-        });
+	providers: [
+		DiscordProvider,
+		GitHubProvider,
+		CredentialsProvider({
+			name: "Guest Login",
+			credentials: {},
+			async authorize() {
+				const user = await db.user.create({
+					data: {
+						name: `Guest_${Math.floor(Math.random() * 10000)}`,
+						email: `guest_${crypto.randomUUID()}@poker.local`,
+						chips: 1000,
+						wallet: 1000,
+						image: "/Guest.png",
+					},
+				});
 
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          chips: user.chips,
-          image: user.image,
-          developer: user.developer ?? false,
-        };
-      },
-    }),
-  ],
-  adapter: PrismaAdapter(db),
-  session: {
-    strategy: "jwt", // ⚡ wichtig!
-  },
-  pages: {
-    signIn: "/login", // 👈 schickt nicht eingeloggte User zur Login-Seite
-  },
-  callbacks: {
-    // ⚙️ JWT Callback: Wird jedes Mal beim Token-Erstellen oder Aktualisieren aufgerufen
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.chips = user.chips ?? 1000;
-        token.image = user.image || "/Guest.png";
-        token.developer = user.developer ?? false;
-      }
-      return token;
-    },
+				return {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					chips: user.chips,
+					wallet: user.wallet,
+					image: user.image,
+					developer: user.developer ?? false,
+				};
+			},
+		}),
+	],
+	adapter: PrismaAdapter(db),
+	session: {
+		strategy: "jwt", // ⚡ wichtig!
+	},
+	pages: {
+		signIn: "/login", // 👈 schickt nicht eingeloggte User zur Login-Seite
+	},
+	callbacks: {
+		// ⚙️ JWT Callback: Wird jedes Mal beim Token-Erstellen oder Aktualisieren aufgerufen
+		async jwt({ token, user }) {
+			if (user) {
+				token.id = user.id;
+				token.chips = user.chips ?? 1000;
+				token.wallet = user.wallet ?? 1000;
+				token.image = user.image || "/Guest.png";
+				token.developer = user.developer ?? false;
+			}
+			return token;
+		},
 
-    // ⚙️ Session Callback: Baut das Session-Objekt, das du im Frontend bekommst
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string;
-        session.user.chips = token.chips as number;
-        session.user.image = token.image as string;
-        session.user.developer = token.developer as boolean;
-      }
-      return session;
-    },
-  },
+		// ⚙️ Session Callback: Baut das Session-Objekt, das du im Frontend bekommst
+		async session({ session, token }) {
+			if (token) {
+				session.user.id = token.id as string;
+				session.user.chips = token.chips as number;
+				session.user.wallet = token.wallet as number;
+				session.user.image = token.image as string;
+				session.user.developer = token.developer as boolean;
+			}
+			return session;
+		},
+	},
 } satisfies NextAuthConfig;

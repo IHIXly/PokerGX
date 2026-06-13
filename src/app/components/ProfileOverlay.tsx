@@ -1,37 +1,43 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
+import { useState } from "react";
 
-export default function ProfileOverlay({ user, onClose }: {
-  user: { name: string; image?: string; chips: number };
-  onClose: () => void;
+export default function ProfileOverlay({
+	user,
+	onClose,
+}: {
+	user: { name: string; image?: string; wallet: number };
+	onClose: () => void;
 }) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.2 }}
-        className="bg-gray-900 rounded-xl p-8 shadow-lg w-[400px] text-white relative"
-      >
-        <button onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-white">
-          ✕
-        </button>
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+			<motion.div
+				initial={{ scale: 0.9, opacity: 0 }}
+				animate={{ scale: 1, opacity: 1 }}
+				transition={{ duration: 0.2 }}
+				className="relative w-[400px] rounded-xl bg-gray-900 p-8 text-white shadow-lg"
+			>
+				<button
+					type="button"
+					onClick={onClose}
+					className="absolute top-4 right-4 text-gray-400 hover:text-white"
+				>
+					✕
+				</button>
 
-        <div className="flex flex-col items-center text-center">
-          <img
-            src={user.image ?? "/default-avatar.png"}
-            alt="Profile"
-            className="w-20 h-20 rounded-full border-2 border-indigo-500 mb-4"
-          />
-          <h2 className="text-2xl font-semibold">{user.name}</h2>
-          <p className="text-indigo-400 mt-1">{user.chips} Chips</p>
+				<div className="flex flex-col items-center text-center">
+					<img
+						src={user.image ?? "/default-avatar.png"}
+						alt="Profile"
+						className="mb-4 h-20 w-20 rounded-full border-2 border-indigo-500"
+					/>
+					<h2 className="font-semibold text-2xl">{user.name}</h2>
+					<p className="mt-1 text-indigo-400">{user.wallet} Chips</p>
 
-          <div className="mt-6 space-y-2 w-full">
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  );
+					<div className="mt-6 w-full space-y-2" />
+				</div>
+			</motion.div>
+		</div>
+	);
 }

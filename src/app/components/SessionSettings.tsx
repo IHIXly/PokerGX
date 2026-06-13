@@ -1,120 +1,113 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
 import { api } from "@/trpc/react"; // <-- wichtig
-import { join } from "path";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function SessionSettings({
-    user,
-  onClose,
+	user,
+	onClose,
 }: {
-  user: { name: string; image?: string; chips: number, id: string };
-  onClose: () => void;
+	user: { name: string; image?: string; chips: number; id: string };
+	onClose: () => void;
 }) {
-  const utils = api.useUtils();
-  const router = useRouter();
-  const [chips, setChips] = useState(user.chips);
-  const [name, setName] = useState("");
-  const [privatelobby, setChecked] = useState(false);
+	const utils = api.useUtils();
+	const router = useRouter();
+	const [buyIn, setBuyIn] = useState(1000);
+	const [name, setName] = useState("");
+	const [privatelobby, setChecked] = useState(false);
 
-  // tRPC Mutation für Chips-Update
-  const updateChips = api.poker.updateChips.useMutation({
-    onSuccess: () => {
-      onClose(); // schließt das Fenster nach dem Speichern
-    },
-  });
+	const incrementBuyIn = () =>
+		setBuyIn((prev) => Math.min(prev + 100, 1_000_000));
+	const decrementBuyIn = () => setBuyIn((prev) => Math.max(prev - 100, 1));
 
-  const incrementChips = () => setChips((prev) => prev + 100);
-  const decrementChips = () => setChips((prev) => Math.max(prev - 100, 0));
+	const createSession = api.poker.createSession.useMutation({
+		onSuccess: (data) => {
+			utils.poker.getSessions.invalidate();
+			router.push(`/room/${data.sessionID}`); // <-- direkt in den Raum!
+		},
+	});
 
-  const handleSave = async () => { // wartet, bis Chips gespeichert sind
-    await updateChips.mutateAsync({ chips });
-  };
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+			<motion.div
+				initial={{ scale: 0.9, opacity: 0 }}
+				animate={{ scale: 1, opacity: 1 }}
+				transition={{ duration: 0.2 }}
+				className="relative flex h-[450px] w-[700px] overflow-hidden rounded-xl bg-gray-900 text-white shadow-lg"
+			>
+				{/* Close */}
+				<button
+					type="button"
+					onClick={onClose}
+					className="absolute top-4 right-4 z-50 text-gray-400 hover:text-white"
+				>
+					✕
+				</button>
 
+				{/* LEFT SIDEBAR */}
+				<div className="flex w-48 flex-col gap-4 border-gray-700 border-r bg-gray-800 p-4">
+					<h3 className="font-semibold text-lg">Settings</h3>
 
-  const createSession = api.poker.createSession.useMutation({
-    onSuccess: (data) => {
-      utils.poker.getSessions.invalidate();
-      router.push(`/room/${data.sessionID}`); // <-- direkt in den Raum!
-  },
-});
+					<label className="flex cursor-pointer items-center gap-2">
+						<input
+							type="checkbox"
+							checked={privatelobby}
+							onChange={(e) => setChecked(e.target.checked)}
+							className="accent-indigo-500"
+						/>
+						Private Lobby
+					</label>
+				</div>
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
+				{/* RIGHT MAIN CONTENT */}
+				<div className="flex flex-1 flex-col items-center justify-center gap-6">
+					<h2 className="font-semibold text-2xl">Neue Runde</h2>
 
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.2 }}
-        className="bg-gray-900 rounded-xl shadow-lg w-[700px] h-[450px] text-white relative overflow-hidden flex"
-      >
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 hover:text-white z-50"
-        >
-          ✕
-        </button>
+					<input
+						id="name"
+						type="text"
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						placeholder="Raumname eingeben"
+						className="w-64 rounded-md border border-indigo-600 bg-gray-800 p-2 text-center"
+					/>
 
-        {/* LEFT SIDEBAR */}
-        <div className="w-48 bg-gray-800 border-r border-gray-700 p-4 flex flex-col gap-4">
-          <h3 className="text-lg font-semibold">Settings</h3>
+					<div className="flex items-center justify-center gap-6">
+						<button
+							type="button"
+							onClick={decrementBuyIn}
+							className="rounded bg-gray-700 px-4 py-2 text-lg hover:bg-gray-600"
+						>
+							−
+						</button>
+						<span className="font-bold text-2xl">{buyIn}</span>
+						<button
+							type="button"
+							onClick={incrementBuyIn}
+							className="rounded bg-gray-700 px-4 py-2 text-lg hover:bg-gray-600"
+						>
+							+
+						</button>
+					</div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={privatelobby}
-              onChange={(e) => setChecked(e.target.checked)}
-              className="accent-indigo-500"
-            />
-            Private Lobby
-          </label>
-        </div>
-
-        {/* RIGHT MAIN CONTENT */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-6">
-
-          <h2 className="text-2xl font-semibold">Neue Runde</h2>
-
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Raumname eingeben"
-            className="p-2 rounded-md bg-gray-800 border border-indigo-600 w-64 text-center"
-          />
-
-          <div className="flex items-center justify-center gap-6">
-            <button
-              onClick={decrementChips}
-              className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-lg"
-            >
-              −
-            </button>
-            <span className="text-2xl font-bold">{chips}</span>
-            <button
-              onClick={incrementChips}
-              className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-lg"
-            >
-              +
-            </button>
-          </div>
-
-          <button
-            onClick={async () => {
-              await handleSave();
-              if (name) createSession.mutate({ name, privateSession: privatelobby, createdBy: user.id });
-            }}
-            className="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded-lg font-semibold mt-4"
-          >
-            Speichern
-          </button>
-        </div>
-      </motion.div>
-    </div>
-);
-
+					<button
+						type="button"
+						onClick={() => {
+							if (name)
+								createSession.mutate({
+									name,
+									privateSession: privatelobby,
+									buyIn,
+								});
+						}}
+						className="mt-4 rounded-lg bg-indigo-600 px-6 py-2 font-semibold hover:bg-indigo-700"
+					>
+						Speichern
+					</button>
+				</div>
+			</motion.div>
+		</div>
+	);
 }

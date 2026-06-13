@@ -46,6 +46,12 @@ function SkeletonCard() {
 
 function SessionSelectInner() {
 	const { data: authSession, status: authStatus } = useSession();
+  const { data: me, refetch: refetchMe } = api.poker.getMe.useQuery(
+  undefined,
+  {
+    enabled: authStatus === "authenticated",
+  },
+);
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -68,6 +74,7 @@ function SessionSelectInner() {
 	const [search, setSearch] = useState("");
 	const [showCreate, setShowCreate] = useState(false);
 	const [newName, setNewName] = useState("");
+	const [newBuyIn, setNewBuyIn] = useState("1000");
 	const [newPrivate, setNewPrivate] = useState(false);
 	const [showJoinByCode, setShowJoinByCode] = useState(false);
 	const [sessionCode, setSessionCode] = useState("");
@@ -102,8 +109,10 @@ function SessionSelectInner() {
 	const createSession = api.poker.createSession.useMutation({
 		onSuccess: (data) => {
 			void refetch();
+      void refetchMe();
 			setShowCreate(false);
 			setNewName("");
+			setNewBuyIn("1000");
 			setNewPrivate(false);
 			toast.success("Session erstellt!");
 			router.push(`/room/${data.sessionID}`);
@@ -179,12 +188,10 @@ function SessionSelectInner() {
 
 	const handleCreateSession = (input: {
 		name: string;
+		buyIn: number;
 		privateSession: boolean;
 	}) => {
-		const payload = { ...input, createdBy: userId };
-		createSession.mutate(
-			payload as unknown as Parameters<typeof createSession.mutate>[0],
-		);
+		createSession.mutate(input);
 	};
 
 	// ── Filtered list ──────────────────────────────────────────────────────────
@@ -313,14 +320,17 @@ function SessionSelectInner() {
 					{showCreate && (
 						<CreateSessionModal
 							name={newName}
+							buyIn={newBuyIn}
 							privateSession={newPrivate}
 							isPending={createSession.isPending}
 							onNameChange={setNewName}
+							onBuyInChange={setNewBuyIn}
 							onPrivateChange={setNewPrivate}
 							onCreate={handleCreateSession}
 							onClose={() => {
 								setShowCreate(false);
 								setNewName("");
+								setNewBuyIn("1000");
 								setNewPrivate(false);
 							}}
 						/>

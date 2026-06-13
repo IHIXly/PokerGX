@@ -37,6 +37,18 @@ type BetAction = {
   amount?: number;
 };
 
+type SessionPlayer = {
+  userId: string;
+  chips: number;
+};
+
+type SessionUser = {
+  user: {
+    id: string;
+    name?: string | null;
+  };
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const VALUE_MAP: Record<number, string> = { 11: "J", 12: "Q", 13: "K", 14: "A" };
@@ -274,6 +286,7 @@ export default function PokerGamePage() {
     { sessionId },
     { enabled: !!sessionId }
   );
+  const { mutate: syncSessionChips } = api.poker.syncSessionChips.useMutation();
 
   const [turnOrder, setTurnOrder] = useState<string[]>([]);
   const [phase, setPhase] = useState(0);
@@ -313,6 +326,7 @@ export default function PokerGamePage() {
   const raiseRef = useRef<(() => void) | null>(null);
 
   const userName = authSession?.user?.name ?? "Unbekannt";
+  const isHostForSync = session?.createdBy === authSession?.user?.id;
 
   const getAudio = useCallback(() => {
     if (!audioCtxRef.current) audioCtxRef.current = createAudioContext();
@@ -365,6 +379,27 @@ export default function PokerGamePage() {
       }
       prevMembersRef.current = m;
       setMembers(m);
+
+      if (isHostForSync && session?.users) {
+        const players = m
+          .map((member): SessionPlayer | null => {
+            const sessionUser = session.users.find(
+              (u: SessionUser) => (u.user.name ?? "Unbekannt") === member.name,
+            );
+
+            if (!sessionUser) return null;
+
+            return {
+              userId: sessionUser.user.id,
+              chips: member.chips,
+            };
+          })
+          .filter((player): player is SessionPlayer => player !== null);
+
+        if (players.length > 0) {
+          syncSessionChips({ sessionId, players });
+        }
+      }
     });
 
     socket.on("update_ready", (ready: string[]) => setReadyPlayers(ready));
@@ -412,7 +447,7 @@ export default function PokerGamePage() {
     });
 
     return () => { socket.disconnect(); socketRef.current = null; };
-  }, [sessionId]);
+  }, [sessionId, isHostForSync, session?.users, syncSessionChips]);
 
   // Chat auto-scroll
   useEffect(() => {

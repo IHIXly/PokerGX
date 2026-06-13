@@ -2,6 +2,7 @@ export type StatusFilter = "alle" | "laufend" | "gestartet" | "beendet";
 
 export interface SessionUser {
 	id: string;
+	buyIn: number;
 	chips: number;
 	user: {
 		id: string;
@@ -16,6 +17,7 @@ export interface PokerSession {
 	status: string;
 	private: boolean;
 	createdBy: string;
+	buyIn: number;
 	sessionCode?: number | null;
 	createdAt: Date;
 	updatedAt: Date;

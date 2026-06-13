@@ -39,7 +39,7 @@ model User {
   name          String?
   email         String?            @unique
   emailVerified DateTime?
-  wallet        Int                @default(0)
+  wallet        Int                @default(1000)
   chips         Int                @default(1000)
   image         String?
   accounts      Account[]
@@ -66,7 +66,6 @@ model PokerSessionUser {
   id             String       @id @default(cuid())
   userId         String
   pokerSessionId String
-  wallet         Int          @default(0)
   buyIn          Int          @default(1000)
   chips          Int
   seatNumber     Int?
