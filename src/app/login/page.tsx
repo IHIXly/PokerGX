@@ -33,6 +33,8 @@ export default function LoginPage() {
             Als Gast fortfahren
           </button>
         </div>
+        <div className="relative z-10"></div>
+        <h2 className="text-3 font">Early Access V.0.1.3</h2>
       </div>
     </main>
   )

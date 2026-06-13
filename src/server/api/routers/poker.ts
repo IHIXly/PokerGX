@@ -3,24 +3,44 @@ import { z } from "zod";
 import { cronProcedure } from "../trpc";
 
 export const pokerRouter = createTRPCRouter({
-  // ✅ Neue Session erstellen
+  // Neue Session erstellen
   createSession: protectedProcedure
-    .input(z.object({ name: z.string().min(3).max(50), privateSession: z.boolean().default(false), createdBy: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      console.log("RECEIVED INPUT:", input);
-      const userId = ctx.session.user.id;
+  .input(z.object({
+    name: z.string().min(3).max(50),
+    privateSession: z.boolean().default(false),
+    buyIn: z.number().min(1).max(1_000_000),
+  }))
+  .mutation(async ({ ctx, input }) => {
+    const userId = ctx.session.user.id;
 
-      const session = await ctx.db.pokerSession.create({
+    return await ctx.db.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { wallet: true },
+      });
+
+      if (!user || user.wallet < input.buyIn) {
+        throw new Error("Nicht genug Guthaben.");
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { wallet: { decrement: input.buyIn } },
+      });
+
+      const session = await tx.pokerSession.create({
         data: {
           name: input.name,
           private: input.privateSession,
-          createdBy: input.createdBy,
+          createdBy: userId,
+          buyIn: input.buyIn,
           sessionCode: Math.floor(Math.random() * 1000000),
           status: "laufend",
           users: {
             create: {
               userId,
-              chips: ctx.session.user.chips,
+              chips: input.buyIn,
+              wallet: input.buyIn,
               isActive: true,
             },
           },
@@ -29,9 +49,10 @@ export const pokerRouter = createTRPCRouter({
       });
 
       return { session, sessionID: session.id };
-    }),
+    });
+  }),
 
-  // ✅ Session beenden
+  // Session beenden
   endSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -64,7 +85,7 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Session löschen (Host only)
+  // Session löschen (Host only)
   clearSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -100,7 +121,7 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Session updatedAt aktualisieren
+  // Session updatedAt aktualisieren
   updateUpdateAt: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -110,43 +131,56 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Session beitreten
+  // Session beitreten
   joinSession: protectedProcedure
-    .input(z.object({ sessionId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
+  .input(z.object({ sessionId: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    const userId = ctx.session.user.id;
 
-      const session = await ctx.db.pokerSession.findUnique({
+    return await ctx.db.$transaction(async (tx) => {
+      const session = await tx.pokerSession.findUnique({
         where: { id: input.sessionId },
-        select: { status: true },
       });
 
-      if (!session) {
-        throw new Error("Session nicht gefunden.");
-      }
-
+      if (!session) throw new Error("Session nicht gefunden.");
       if (session.status === "gestartet") {
         throw new Error("Das Spiel ist bereits gestartet.");
       }
 
-      const existing = await ctx.db.pokerSessionUser.findFirst({
+      const existing = await tx.pokerSessionUser.findFirst({
         where: { pokerSessionId: input.sessionId, userId },
       });
 
-      if (!existing) {
-        await ctx.db.pokerSessionUser.create({
-          data: {
-            userId,
-            pokerSessionId: input.sessionId,
-            chips: ctx.session.user.chips ?? 1000,
-          },
-        });
+      if (existing) return { sessionId: input.sessionId };
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { wallet: true },
+      });
+
+      if (!user || user.wallet < session.buyIn) {
+        throw new Error("Nicht genug Guthaben.");
       }
 
-      return { sessionId: input.sessionId };
-    }),
+      await tx.user.update({
+        where: { id: userId },
+        data: { wallet: { decrement: session.buyIn } },
+      });
 
-  // ✅ Session per Code beitreten
+      await tx.pokerSessionUser.create({
+        data: {
+          userId,
+          pokerSessionId: session.id,
+          chips: session.buyIn,
+          wallet: session.buyIn,
+        },
+      });
+
+      return { sessionId: session.id };
+    });
+  }),
+
+  // Session per Code beitreten
   joinSessionByCode: protectedProcedure
     .input(z.object({ sessionCode: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -186,7 +220,7 @@ export const pokerRouter = createTRPCRouter({
       return { sessionId: session.id };
     }),
 
-  // ✅ Spiel starten
+  // Spiel starten
   startSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -196,7 +230,7 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Alle Sessions abrufen
+  // Alle Sessions abrufen
   getSessions: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.pokerSession.findMany({
       include: { users: { include: { user: true } } },
@@ -222,7 +256,7 @@ export const pokerRouter = createTRPCRouter({
     });
   }),
 
-  // ✅ Chips aktualisieren
+  // Chips aktualisieren
   updateChips: protectedProcedure
     .input(z.object({ chips: z.number().min(0).max(1_000_000) }))
     .mutation(async ({ ctx, input }) => {
@@ -236,7 +270,7 @@ export const pokerRouter = createTRPCRouter({
       return { chips: updated.chips };
     }),
 
-  // ✅ Session nach ID abrufen
+  // Session nach ID abrufen
   getSessionById: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -260,7 +294,7 @@ export const pokerRouter = createTRPCRouter({
       return user?.developer ?? false;
     }),
 
-  // ✅ Session löschen (Developer only)
+  // Session löschen (Developer only)
   developerClearSession: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -284,7 +318,7 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Inaktive Sessions beenden (72h Inaktivität)
+  // Inaktive Sessions beenden (72h Inaktivität)
   terminateSessionForInactivity: cronProcedure
     .mutation(async ({ ctx, input }) => {
       const cutoff = new Date(Date.now() - (1000 * 60 * 60 * 24) * 5);
@@ -304,7 +338,7 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Startchips für alle Spieler in einer Session setzen
+  // Startchips für alle Spieler in einer Session setzen
   updateSessionChips: protectedProcedure
     .input(z.object({ sessionId: z.string(), chips: z.number().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -324,7 +358,7 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Spieler aus Session entfernen (Host only)
+  // Spieler aus Session entfernen (Host only)
   kickPlayer: protectedProcedure
     .input(z.object({ sessionId: z.string(), userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -346,16 +380,41 @@ export const pokerRouter = createTRPCRouter({
       });
     }),
 
-  // ✅ Spieler verlässt die Session (selbst entfernen)
+  // Spieler verlässt die Session (selbst entfernen)
   leaveSession: protectedProcedure
-    .input(z.object({ sessionId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
+  .input(z.object({ sessionId: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    const userId = ctx.session.user.id;
 
-      await ctx.db.pokerSessionUser.deleteMany({
-        where: { pokerSessionId: input.sessionId, userId },
+    return await ctx.db.$transaction(async (tx) => {
+      const sessionUser = await tx.pokerSessionUser.findFirst({
+        where: {
+          pokerSessionId: input.sessionId,
+          userId,
+        },
       });
 
-      return { sessionId: input.sessionId };
-    }),
+      if (!sessionUser) {
+        throw new Error("Du bist nicht Teil dieser Session.");
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          wallet: {
+            increment: sessionUser.chips,
+          },
+        },
+      });
+
+      await tx.pokerSessionUser.delete({
+        where: { id: sessionUser.id },
+      });
+
+      return {
+        sessionId: input.sessionId,
+        cashedOut: sessionUser.chips,
+      };
+    });
+  }),
 });

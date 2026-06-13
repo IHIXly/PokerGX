@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "PokerSession" ADD COLUMN     "buyIn" INTEGER NOT NULL DEFAULT 1000;
+
+-- AlterTable
+ALTER TABLE "PokerSessionUser" ADD COLUMN     "buyIn" INTEGER NOT NULL DEFAULT 1000,
+ADD COLUMN     "wallet" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "wallet" INTEGER NOT NULL DEFAULT 0;

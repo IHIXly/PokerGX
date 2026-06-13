@@ -39,6 +39,7 @@ model User {
   name          String?
   email         String?            @unique
   emailVerified DateTime?
+  wallet        Int                @default(0)
   chips         Int                @default(1000)
   image         String?
   accounts      Account[]
@@ -54,6 +55,7 @@ model PokerSession {
   status      String
   createdBy   String
   gameState   Json?
+  buyIn       Int                @default(1000)
   sessionCode Int                @unique
   users       PokerSessionUser[]
   createdAt   DateTime           @default(now())
@@ -64,6 +66,8 @@ model PokerSessionUser {
   id             String       @id @default(cuid())
   userId         String
   pokerSessionId String
+  wallet         Int          @default(0)
+  buyIn          Int          @default(1000)
   chips          Int
   seatNumber     Int?
   isActive       Boolean      @default(true)
