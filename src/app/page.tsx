@@ -1,5 +1,6 @@
 "use client";
 
+import { DeveloperControlPanel } from "@/app/components/developer/DeveloperControlPanel";
 import { ChipIcon } from "@/app/components/session/ChipIcon";
 import { CreateSessionModal } from "@/app/components/session/CreateSessionModal";
 import { JoinByCodeModal } from "@/app/components/session/JoinByCodeModal";
@@ -46,12 +47,9 @@ function SkeletonCard() {
 
 function SessionSelectInner() {
 	const { data: authSession, status: authStatus } = useSession();
-  const { data: me, refetch: refetchMe } = api.poker.getMe.useQuery(
-  undefined,
-  {
-    enabled: authStatus === "authenticated",
-  },
-);
+	const { data: me, refetch: refetchMe } = api.poker.getMe.useQuery(undefined, {
+		enabled: authStatus === "authenticated",
+	});
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -109,7 +107,7 @@ function SessionSelectInner() {
 	const createSession = api.poker.createSession.useMutation({
 		onSuccess: (data) => {
 			void refetch();
-      void refetchMe();
+			void refetchMe();
 			setShowCreate(false);
 			setNewName("");
 			setNewBuyIn("1000");
@@ -171,7 +169,8 @@ function SessionSelectInner() {
 		prevIds.current = currentIds;
 	}, [sessions]);
 
-	const isDeveloper = authSession?.user?.developer === true;
+	const isDeveloper =
+		authSession?.user?.developer === true || me?.developer === true;
 	const userId = authSession?.user?.id ?? "";
 
 	// ── Auto-format join code ──────────────────────────────────────────────────
@@ -457,6 +456,17 @@ function SessionSelectInner() {
 							)}
 						</div>
 					)}
+
+					<DeveloperControlPanel
+						isDeveloper={isDeveloper}
+						onSessionsCleared={() => {
+							void refetch();
+							void refetchMe();
+						}}
+						onWalletUpdated={() => {
+							void refetchMe();
+						}}
+					/>
 				</div>
 			</div>
 

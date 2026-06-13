@@ -56,6 +56,17 @@ async function cashOutAllSessionUsers(
 	return sessionUsers.reduce((sum, sessionUser) => sum + sessionUser.chips, 0);
 }
 
+async function assertDeveloper(tx: Prisma.TransactionClient, userId: string) {
+	const user = await tx.user.findUnique({
+		where: { id: userId },
+		select: { developer: true },
+	});
+
+	if (!user?.developer) {
+		throw new Error("Nur Entwickler dürfen diese Aktion ausführen.");
+	}
+}
+
 async function joinSessionWithBuyIn(
 	tx: Prisma.TransactionClient,
 	sessionId: string,
@@ -272,20 +283,20 @@ export const pokerRouter = createTRPCRouter({
 				data: { status: "gestartet" },
 			});
 		}),
-  
-  // Eigene Benutzerdaten abrufen
-  getMe: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.db.user.findUnique({
-      where: { id: ctx.session.user.id },
-      select: {
-        id: true,
-        name: true,
-        image: true,
-        wallet: true,
-        developer: true,
-      },
-    });
-  }),
+
+	// Eigene Benutzerdaten abrufen
+	getMe: protectedProcedure.query(async ({ ctx }) => {
+		return ctx.db.user.findUnique({
+			where: { id: ctx.session.user.id },
+			select: {
+				id: true,
+				name: true,
+				image: true,
+				wallet: true,
+				developer: true,
+			},
+		});
+	}),
 
 	// Alle Sessions abrufen
 	getSessions: protectedProcedure.query(async ({ ctx }) => {
@@ -354,14 +365,7 @@ export const pokerRouter = createTRPCRouter({
 			const userId = ctx.session.user.id;
 
 			return await ctx.db.$transaction(async (tx) => {
-				const isDev = await tx.user.findUnique({
-					where: { id: userId },
-					select: { developer: true },
-				});
-
-				if (!isDev?.developer) {
-					throw new Error("Nur Entwickler dürfen diese Aktion ausführen.");
-				}
+				await assertDeveloper(tx, userId);
 
 				await cashOutAllSessionUsers(tx, input.sessionId);
 
@@ -371,6 +375,75 @@ export const pokerRouter = createTRPCRouter({
 
 				return await tx.pokerSession.delete({
 					where: { id: input.sessionId },
+				});
+			});
+		}),
+
+	developerClearAllSessions: protectedProcedure.mutation(async ({ ctx }) => {
+		const userId = ctx.session.user.id;
+
+		return await ctx.db.$transaction(async (tx) => {
+			await assertDeveloper(tx, userId);
+
+			const sessions = await tx.pokerSession.findMany({
+				select: { id: true },
+			});
+
+			let cashedOut = 0;
+			for (const session of sessions) {
+				cashedOut += await cashOutAllSessionUsers(tx, session.id);
+			}
+
+			await tx.pokerSessionUser.deleteMany({
+				where: {
+					pokerSessionId: { in: sessions.map((session) => session.id) },
+				},
+			});
+
+			const deleted = await tx.pokerSession.deleteMany({
+				where: { id: { in: sessions.map((session) => session.id) } },
+			});
+
+			return {
+				deletedSessions: deleted.count,
+				cashedOut,
+			};
+		});
+	}),
+
+	developerSetUserWallet: protectedProcedure
+		.input(
+			z.object({
+				userIdOrEmail: z.string().trim().min(1),
+				wallet: z.number().int().min(0).max(SESSION_CHIPS_MAX),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const developerId = ctx.session.user.id;
+
+			return await ctx.db.$transaction(async (tx) => {
+				await assertDeveloper(tx, developerId);
+
+				const user = await tx.user.findFirst({
+					where: {
+						OR: [{ id: input.userIdOrEmail }, { email: input.userIdOrEmail }],
+					},
+					select: { id: true },
+				});
+
+				if (!user) {
+					throw new Error("User nicht gefunden.");
+				}
+
+				return await tx.user.update({
+					where: { id: user.id },
+					data: { wallet: input.wallet },
+					select: {
+						id: true,
+						name: true,
+						email: true,
+						wallet: true,
+					},
 				});
 			});
 		}),
